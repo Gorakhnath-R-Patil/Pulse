@@ -1,0 +1,16 @@
+# Example configuration for pulse-collector.
+#
+# All fields are optional — pulse-collector runs with sane defaults if no
+# config file is given at all. Copy this file, edit what you need, and
+# pass it with:
+#
+#   pulse-collector --config collector.yaml
+#
+# See docs/development/configuration.md for the full field reference and
+# environment variable overrides. The collector's schema will grow as
+# ingestion and storage subsystems are implemented (see the roadmap in the
+# root README) — this file will grow with it.
+
+logging:
+  level: info
+  format: json

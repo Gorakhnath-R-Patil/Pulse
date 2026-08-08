@@ -1,0 +1,19 @@
+# Example configuration for pulse-agent.
+#
+# All fields are optional — pulse-agent runs with sane defaults if no
+# config file is given at all (`pulse-agent` with no --config flag).
+# Copy this file, edit what you need, and pass it with:
+#
+#   pulse-agent --config agent.yaml
+#
+# See docs/development/configuration.md for the full field reference and
+# environment variable overrides.
+
+# Identifies this host in emitted telemetry. Defaults to the OS hostname.
+node_name: pulse-node-1
+
+logging:
+  # One of: debug, info, warn, error.
+  level: info
+  # One of: json (machine-readable, production default), text (human-readable).
+  format: json
