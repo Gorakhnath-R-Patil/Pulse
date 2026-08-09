@@ -178,3 +178,43 @@ for software with kernel-level system access where patent exposure is a
 more realistic concern than for typical application code.
 
 **Tradeoffs:** None material for this project's goals.
+
+---
+
+## ADR-006: Protobuf contract checked in without code generation
+
+**Decision:** Define `proto/pulse/v1/event.proto` as the wire-format
+contract for `pkg/model.Event`, but do not wire up `protoc`/`buf` code
+generation, a `proto/generated/` output directory, or a Makefile target
+for it yet.
+
+**Context:** The project's target layout includes a `proto/` directory,
+and section 6 of the engineering standard calls for "protobuf contracts
+where appropriate" as part of the event model. Nothing in the codebase
+consumes generated protobuf Go bindings yet: JSON (via `encoding/json`)
+is what `pkg/model` actually serializes with today, and gRPC/OTLP export
+isn't implemented until Day 13, Kafka transport until Day 14.
+
+**Options:**
+- Check in the `.proto` file only, as a contract/reference, with no build
+  tooling.
+- Install `protoc` (or `buf`) now and generate Go bindings immediately,
+  even though nothing calls them.
+
+**Choice:** Contract only, no codegen yet.
+
+**Reason:** Generating code with no caller is exactly the "TODO-driven
+incomplete architecture" and "fake scalability" the project's standard
+warns against — it would add a toolchain dependency (protoc/buf must be
+installed to regenerate) and a `generated/` package that `go vet`/tests
+would need to account for, with zero present-day payoff. The `.proto`
+file itself is real value today: it's the reviewable schema contract that
+Day 13/14 will generate against, and it forces `pkg/model`'s shape to
+stay expressible in protobuf (no Go-only tricks that wouldn't survive a
+wire format) from the start.
+
+**Tradeoffs:** The `.proto` file and `pkg/model`'s Go structs must be
+kept in sync by hand until codegen exists; a drift between them wouldn't
+be caught by any test today. This is acceptable for two fields' worth of
+schema and should be revisited (add a CI check, or just generate code) if
+the schema grows before Day 13 arrives.

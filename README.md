@@ -54,8 +54,7 @@ behind specific technical choices as they're made, day by day.
 
 ## What works today
 
-Day 1 establishes the project's foundation — architecture and developer
-experience, no observation capability yet:
+Foundation and data model — no observation capability yet:
 
 - Three binaries (`pulse-agent`, `pulse-collector`, `pulse-cli`) that
   build, accept configuration, log their startup/shutdown lifecycle, and
@@ -67,11 +66,17 @@ experience, no observation capability yet:
   every component.
 - `pulse-cli version` and `pulse-cli config validate` for inspecting a
   build and checking a config file without starting anything.
+- Pulse's canonical telemetry record, [`pkg/model.Event`](pkg/model) —
+  identifiers, timestamps, process/network metadata, validation, and JSON
+  serialization — plus its wire-format contract,
+  [`proto/pulse/v1/event.proto`](proto/pulse/v1/event.proto). See
+  [docs/design/event-model.md](docs/design/event-model.md).
 - A CI foundation that runs formatting, `go vet`, and the test suite on
   every push.
 
 Nothing here observes a network, a process, or a kernel event yet — that
-begins with the eBPF foundation later in the roadmap.
+begins with the eBPF foundation later in the roadmap. The event model
+above defines the shape that observation will fill in.
 
 ## Getting started
 

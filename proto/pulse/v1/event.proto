@@ -1,0 +1,60 @@
+// Wire-format contract for Pulse's canonical telemetry record.
+//
+// This mirrors pkg/model.Event field-for-field and is the schema future
+// gRPC/OTLP export (Day 13) and Kafka transport (Day 14) will serialize
+// against. There is no generated Go code from this file yet — it is
+// checked in as the contract itself, not wired into any build step,
+// until a real transport consumes it. See ADR-006 in
+// docs/design/decisions.md for why.
+syntax = "proto3";
+
+package pulse.v1;
+
+option go_package = "github.com/Gorakhnath-R-Patil/Pulse/proto/pulse/v1;pulsev1";
+
+import "google/protobuf/timestamp.proto";
+
+// Event is the wire representation of pkg/model.Event.
+message Event {
+  // Unique identifier for this event instance. See model.NewID.
+  string id = 1;
+
+  // "<domain>.<action>" event kind, e.g. "process.start". See
+  // pkg/model's typePattern for the format this must satisfy.
+  string type = 2;
+
+  google.protobuf.Timestamp timestamp = 3;
+
+  // Host the activity was observed on.
+  string host = 4;
+
+  // Process associated with the activity, if known.
+  Process process = 5;
+
+  // Network endpoints involved, if the activity was network activity.
+  Network network = 6;
+
+  // Domain-specific detail that doesn't warrant its own field. See
+  // pkg/model.Event.Attributes.
+  map<string, string> attributes = 7;
+}
+
+// Process mirrors pkg/model.Process.
+message Process {
+  int32 pid = 1;
+  string executable = 2;
+  string command = 3;
+}
+
+// Network mirrors pkg/model.Network.
+message Network {
+  string protocol = 1;
+  Endpoint source = 2;
+  Endpoint destination = 3;
+}
+
+// Endpoint mirrors pkg/model.Endpoint.
+message Endpoint {
+  string address = 1;
+  uint32 port = 2;
+}

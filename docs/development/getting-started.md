@@ -79,6 +79,8 @@ internal/cli/        pulse-cli command tree, unit-testable via Execute().
 internal/config/     Configuration structs, YAML loading, env overrides, validation.
 internal/logging/    Structured logger construction (log/slog).
 internal/version/    Build-time version/commit/date, injected via -ldflags.
+pkg/model/           Canonical telemetry Event and its sub-structures — the shared data contract.
+proto/               Wire-format contracts (.proto), checked in ahead of any code generation.
 examples/config/     Example YAML configs for each binary.
 docs/design/         Architecture decisions (decisions.md) and design docs.
 docs/development/    This document and related contributor docs.
