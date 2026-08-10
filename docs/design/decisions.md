@@ -218,3 +218,61 @@ kept in sync by hand until codegen exists; a drift between them wouldn't
 be caught by any test today. This is acceptable for two fields' worth of
 schema and should be revisited (add a CI check, or just generate code) if
 the schema grows before Day 13 arrives.
+
+---
+
+## ADR-007: eBPF codegen colocated and regenerated, not committed
+
+**Decision:** `internal/ebpf`'s `bpf2go`-generated bindings
+(`foundation_bpfel.go`/`foundation_bpfeb.go`) are generated directly into
+`internal/ebpf/` — the same package that consumes them — and are not
+committed to the repository. `go generate ./...` regenerates them from
+`bpf/programs/foundation.c` as a required step before `go
+build`/`go test` on Linux, including in CI.
+
+**Context:** The project's target layout (section 4 of the master
+specification) sketches a top-level `bpf/generated/` directory for
+codegen output, separate from the hand-written C source in
+`bpf/programs/`. `bpf2go`'s own convention — used consistently in its
+upstream examples — is to generate into the same directory/package as
+the code that calls the generated loader function, because the
+generated loader function and byte-embed variable are unexported
+(`loadFoundationObjects`, `_FoundationBytes`), which makes them
+inaccessible from a separate package without additional exported
+wrapper code that would just be more generated-adjacent boilerplate to
+maintain.
+
+**Options:**
+- Follow the target layout literally: generate into `bpf/generated/`, and
+  add hand-written exported wrappers in `internal/ebpf` to re-expose what
+  bpf2go generates unexported.
+- Follow `bpf2go`'s own idiom: generate directly into `internal/ebpf`,
+  which needs no wrapper layer since the generated and hand-written code
+  share a package.
+- Either location, but commit the generated `.go`/`.o` files to the
+  repository so `go build` never requires `clang` to be present.
+
+**Choice:** Generate into `internal/ebpf` directly; do not commit the
+output.
+
+**Reason:** Section 3 of the engineering standard explicitly warns
+against "generated boilerplate" — adding an exported wrapper layer
+solely to work around bpf2go's unexported-by-default output would be
+exactly that, for no architectural benefit. Not committing the output
+follows the same principle from the other direction: a compiled BPF
+object embedded via `go:embed` is a binary build artifact, not source;
+committing it would mean the repository could silently drift from
+`foundation.c` (edit the `.c`, forget to regenerate, nobody notices).
+Requiring `clang` and a fresh `go generate` for every build makes that
+drift structurally impossible instead of relying on discipline to catch
+it. This is the same tradeoff the project already made once — see
+ADR-006 — applied in the opposite direction: there, no consumer exists
+yet, so no code is generated at all; here, a real consumer exists, so
+code is generated every time rather than checked in.
+
+**Tradeoffs:** Nobody can `go build ./...` this module's Linux-specific
+packages without `clang` installed, and CI takes slightly longer
+(compile step) on every run. Both are accepted costs of working on a
+kernel-level Go project — see `docs/development/getting-started.md`'s
+Linux/eBPF prerequisites — and are already true of `bpf2go`-based
+projects generally, not a cost specific to this decision.

@@ -73,10 +73,19 @@ Foundation and data model — no observation capability yet:
   [docs/design/event-model.md](docs/design/event-model.md).
 - A CI foundation that runs formatting, `go vet`, and the test suite on
   every push.
+- The eBPF foundation ([`internal/ebpf`](internal/ebpf)): load a real BPF
+  program, attach it to a real kernel tracepoint, receive real events
+  through a BPF ring buffer, and detach cleanly — with kernel
+  compatibility checks and graceful failure on unsupported platforms.
+  The program itself ([`bpf/programs/foundation.c`](bpf/programs/foundation.c))
+  extracts no telemetry — see
+  [docs/design/ebpf-foundation.md](docs/design/ebpf-foundation.md) for
+  what it proves and what it deliberately doesn't do yet.
 
-Nothing here observes a network, a process, or a kernel event yet — that
-begins with the eBPF foundation later in the roadmap. The event model
-above defines the shape that observation will fill in.
+Nothing here observes a real process or a real network connection as
+*telemetry* yet — the eBPF plumbing above is proven end-to-end, but
+turning what it observes into `pkg/model.Event` records begins with
+process discovery later in the roadmap.
 
 ## Getting started
 

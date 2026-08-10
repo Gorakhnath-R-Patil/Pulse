@@ -10,9 +10,15 @@ This guide gets you from a fresh clone to running binaries.
   it uses `$(shell ...)` and `rm -rf`, which native `cmd.exe`/PowerShell
   don't support. If you're on native PowerShell, use the equivalent
   `go build`/`go test` commands shown below instead.
-- **Linux with eBPF support** is not required yet. It becomes required
-  starting Day 03, when `pulse-agent` begins loading eBPF programs. Today,
-  all three binaries build and run on any platform Go supports.
+- **`cmd/pulse-agent`, `cmd/pulse-collector`, and `cmd/pulse-cli` build
+  and run on any platform Go supports** — none of them require Linux or
+  eBPF yet (see `internal/ebpf`'s cross-platform stubs).
+- **Linux 5.8+ and `clang`** are required only to build/test
+  [`internal/ebpf`](../../internal/ebpf)'s real (non-stub)
+  implementation and to regenerate its eBPF bindings — see "eBPF
+  development" below. `go build ./...`/`go test ./...` on any other OS
+  simply excludes those files via build tags; you don't need Linux to
+  work on anything else in this repository.
 
 ## Clone and build
 
@@ -58,6 +64,37 @@ make cover       # with a per-package coverage report
 installed (no MinGW/MSVC), run plain `go test ./...` locally — CI runs the
 race-enabled variant on Linux, where a C toolchain is always present.
 
+## eBPF development
+
+`internal/ebpf`'s Linux implementation depends on generated bindings for
+[`bpf/programs/foundation.c`](../../bpf/programs/foundation.c) that are
+**not committed** to the repository (see ADR-007 in
+`docs/design/decisions.md`) — you must generate them yourself, on Linux,
+with `clang` installed, before `go build`/`go test` will succeed for that
+package:
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install -y clang
+
+go generate ./...
+```
+
+This regenerates `internal/ebpf/foundation_bpfel.go` and
+`foundation_bpfeb.go` from the C source. Re-run it whenever you change a
+file under `bpf/programs/` or `bpf/headers/`.
+
+Loading the resulting program into the kernel (as opposed to just
+compiling it) additionally requires root or `CAP_BPF`+`CAP_PERFMON`:
+
+```bash
+go test ./internal/ebpf/...              # unprivileged: everything except the real load/attach/receive/detach cycle
+sudo -E env "PATH=$PATH" go test ./internal/ebpf/... -run TestLoader   # exercises it for real
+```
+
+Without root, the privileged tests skip themselves with an explanatory
+message rather than failing — see `internal/ebpf/loader_linux_test.go`.
+
 ## Code quality gate
 
 Before committing, run what CI runs:
@@ -79,8 +116,11 @@ internal/cli/        pulse-cli command tree, unit-testable via Execute().
 internal/config/     Configuration structs, YAML loading, env overrides, validation.
 internal/logging/    Structured logger construction (log/slog).
 internal/version/    Build-time version/commit/date, injected via -ldflags.
+internal/ebpf/       eBPF load/attach/receive/detach lifecycle. Linux-only; stubs elsewhere.
 pkg/model/           Canonical telemetry Event and its sub-structures — the shared data contract.
 proto/               Wire-format contracts (.proto), checked in ahead of any code generation.
+bpf/programs/        Hand-written eBPF C source.
+bpf/headers/         Vendored minimal libbpf headers (see bpf/headers/README.md).
 examples/config/     Example YAML configs for each binary.
 docs/design/         Architecture decisions (decisions.md) and design docs.
 docs/development/    This document and related contributor docs.
@@ -88,9 +128,11 @@ docs/development/    This document and related contributor docs.
 
 Every directory above exists because something in it is implemented
 today. Directories described in the project's long-term target layout
-(`bpf/`, `proto/`, `pkg/api`, `deployments/`, `helm/`, …) are created only
-on the day their content is actually implemented — see
-`docs/design/decisions.md` and the project roadmap for why.
+(`pkg/api`, `deployments/`, `helm/`, …) are created only on the day their
+content is actually implemented — see `docs/design/decisions.md` and the
+project roadmap for why. Note `bpf/generated/` from that target layout
+does not exist as a real directory: eBPF codegen output is generated
+directly into `internal/ebpf/` and not committed — see ADR-007.
 
 ## Coding conventions
 

@@ -20,8 +20,20 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.25"
           cache: true
+
+      # clang is the only external dependency for compiling
+      # bpf/programs/*.c: see bpf/headers/README.md for why no other
+      # libbpf/kernel-header packages are needed.
+      - name: Install eBPF build toolchain (clang)
+        run: sudo apt-get update && sudo apt-get install -y clang
+
+      # Regenerates internal/ebpf's bpf2go bindings from
+      # bpf/programs/foundation.c. Not committed to the repo — see
+      # ADR-007 in docs/design/decisions.md.
+      - name: Generate eBPF bindings
+        run: go generate ./...
 
       - name: Build
         run: go build ./...
@@ -43,3 +55,12 @@ jobs:
 
       - name: Coverage summary
         run: go tool cover -func=coverage.out | tail -n 1
+
+      # Loading a BPF program requires root (or CAP_BPF+CAP_PERFMON) on
+      # most kernels. The unprivileged run above already exercises
+      # internal/ebpf's platform-independent contract; this step
+      # re-runs just the loader tests with root to exercise the real
+      # load -> attach -> receive -> detach lifecycle against the
+      # runner's actual kernel.
+      - name: Test eBPF loader (privileged)
+        run: sudo -E env "PATH=$PATH" go test ./internal/ebpf/... -v -run TestLoader
