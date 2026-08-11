@@ -14,6 +14,13 @@ import (
 // Regenerate with `go generate ./...` after changing
 // bpf/programs/foundation.c. Requires clang with a BPF target; see
 // docs/design/ebpf-foundation.md for the toolchain this depends on.
+//
+// The "Foundation" identifier below is capitalized deliberately: bpf2go
+// exports its generated loader function (LoadFoundationObjects, not
+// loadFoundationObjects) whenever the identifier itself looks exported
+// (see cmd/bpf2go/gen's templateName.maybeExport). Lowercase the
+// identifier and the call below would need to lowercase its first
+// letter too.
 //go:generate go tool bpf2go -cc clang -no-strip -tags linux Foundation ../../bpf/programs/foundation.c -- -I../../bpf/headers
 
 // Loader owns the lifecycle of Pulse's eBPF foundation program: load,
@@ -54,7 +61,7 @@ func (l *Loader) Load() error {
 		return fmt.Errorf("ebpf: raising memlock limit: %w", err)
 	}
 
-	if err := loadFoundationObjects(&l.objs, nil); err != nil {
+	if err := LoadFoundationObjects(&l.objs, nil); err != nil {
 		return fmt.Errorf("ebpf: loading foundation program: %w", err)
 	}
 	l.loaded = true

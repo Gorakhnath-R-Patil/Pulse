@@ -1,0 +1,16 @@
+# Force LF line endings for source files regardless of a contributor's
+# platform or core.autocrlf setting. Without this, Windows checkouts can
+# silently rewrite files to CRLF (as happened during Day 03's merge),
+# which gofmt then reports as "unformatted" even though nothing about
+# the actual content changed.
+* text=auto eol=lf
+
+*.go     text eol=lf
+*.c      text eol=lf
+*.h      text eol=lf
+*.proto  text eol=lf
+*.yaml   text eol=lf
+*.yml    text eol=lf
+*.md     text eol=lf
+*.sh     text eol=lf
+Makefile text eol=lf
