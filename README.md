@@ -54,8 +54,6 @@ behind specific technical choices as they're made, day by day.
 
 ## What works today
 
-Foundation and data model — no observation capability yet:
-
 - Three binaries (`pulse-agent`, `pulse-collector`, `pulse-cli`) that
   build, accept configuration, log their startup/shutdown lifecycle, and
   exit cleanly on `SIGINT`/`SIGTERM`.
@@ -81,11 +79,20 @@ Foundation and data model — no observation capability yet:
   extracts no telemetry — see
   [docs/design/ebpf-foundation.md](docs/design/ebpf-foundation.md) for
   what it proves and what it deliberately doesn't do yet.
+- Process discovery ([`internal/process`](internal/process)): real
+  process start/exit events, captured in-kernel via
+  [`bpf/programs/process.c`](bpf/programs/process.c) (PID, parent PID,
+  command name, minimal CO-RE — no `vmlinux.h` needed), normalized into
+  `pkg/model.Event`, and logged by `pulse-agent` on any Linux host it
+  runs on with sufficient privilege — gracefully unavailable, not fatal,
+  everywhere else. See
+  [docs/design/process-discovery.md](docs/design/process-discovery.md).
 
-Nothing here observes a real process or a real network connection as
-*telemetry* yet — the eBPF plumbing above is proven end-to-end, but
-turning what it observes into `pkg/model.Event` records begins with
-process discovery later in the roadmap.
+This is real, kernel-observed telemetry, not a placeholder — run
+`pulse-agent` on Linux and it logs every process that starts or exits on
+the host. What's not here yet: network/socket telemetry, container/
+service identity, distributed tracing, export, and storage — all later
+in the roadmap.
 
 ## Getting started
 

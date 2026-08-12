@@ -80,20 +80,22 @@ sudo apt-get install -y clang
 go generate ./...
 ```
 
-This regenerates `internal/ebpf/foundation_bpfel.go` and
-`foundation_bpfeb.go` from the C source. Re-run it whenever you change a
-file under `bpf/programs/` or `bpf/headers/`.
+This regenerates the bpf2go bindings for both `internal/ebpf` (from
+`bpf/programs/foundation.c`) and `internal/process` (from
+`bpf/programs/process.c`). Re-run it whenever you change a file under
+`bpf/programs/` or `bpf/headers/`.
 
-Loading the resulting program into the kernel (as opposed to just
-compiling it) additionally requires root or `CAP_BPF`+`CAP_PERFMON`:
+Loading the resulting programs into the kernel (as opposed to just
+compiling them) additionally requires root or `CAP_BPF`+`CAP_PERFMON`:
 
 ```bash
-go test ./internal/ebpf/...              # unprivileged: everything except the real load/attach/receive/detach cycle
-sudo -E env "PATH=$PATH" go test ./internal/ebpf/... -run TestLoader   # exercises it for real
+go test ./internal/ebpf/... ./internal/process/...              # unprivileged: everything except the real load/attach/receive/detach cycle
+sudo -E env "PATH=$PATH" go test ./internal/ebpf/... ./internal/process/... -run TestLoader   # exercises it for real
 ```
 
 Without root, the privileged tests skip themselves with an explanatory
-message rather than failing — see `internal/ebpf/loader_linux_test.go`.
+message rather than failing — see `internal/ebpf/loader_linux_test.go`
+and `internal/process/loader_linux_test.go`.
 
 ## Code quality gate
 
@@ -110,13 +112,14 @@ Or individually: `make fmt` (reformat), `make vet` (static analysis),
 
 ```
 cmd/                 Binary entry points — thin: flag parsing, wiring, os.Exit.
-internal/agent/      pulse-agent application (lifecycle skeleton today).
+internal/agent/      pulse-agent application — starts process discovery, best-effort.
 internal/collector/  pulse-collector application (lifecycle skeleton today).
 internal/cli/        pulse-cli command tree, unit-testable via Execute().
 internal/config/     Configuration structs, YAML loading, env overrides, validation.
 internal/logging/    Structured logger construction (log/slog).
 internal/version/    Build-time version/commit/date, injected via -ldflags.
 internal/ebpf/       eBPF load/attach/receive/detach lifecycle. Linux-only; stubs elsewhere.
+internal/process/    Process discovery: kernel capture, decode, normalize to pkg/model.Event.
 pkg/model/           Canonical telemetry Event and its sub-structures — the shared data contract.
 proto/               Wire-format contracts (.proto), checked in ahead of any code generation.
 bpf/programs/        Hand-written eBPF C source.
