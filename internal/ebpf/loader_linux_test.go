@@ -37,6 +37,14 @@ func TestCheckSupport_Linux(t *testing.T) {
 	}
 }
 
+func TestHaveTracing_Linux(t *testing.T) {
+	// Same caveat as TestCheckSupport_Linux: a failure here could mean
+	// "no fentry/fexit support" or "insufficient privilege to probe."
+	if err := ebpf.HaveTracing(); err != nil {
+		t.Skipf("HaveTracing() failed (unsupported kernel or insufficient privilege): %v", err)
+	}
+}
+
 func TestLoader_AttachBeforeLoadFails(t *testing.T) {
 	l := ebpf.NewLoader()
 	defer l.Close()

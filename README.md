@@ -87,11 +87,19 @@ behind specific technical choices as they're made, day by day.
   runs on with sufficient privilege — gracefully unavailable, not fatal,
   everywhere else. See
   [docs/design/process-discovery.md](docs/design/process-discovery.md).
+- Network connection telemetry ([`internal/network`](internal/network)):
+  real outbound IPv4 TCP connect attempts, captured in-kernel via
+  [`bpf/programs/tcp_connect.c`](bpf/programs/tcp_connect.c) — source and
+  destination address/port, the connecting process, and whether the
+  connect succeeded — normalized into `pkg/model.Event` and logged by
+  `pulse-agent` alongside process events. See
+  [docs/design/network-connect.md](docs/design/network-connect.md).
 
 This is real, kernel-observed telemetry, not a placeholder — run
-`pulse-agent` on Linux and it logs every process that starts or exits on
-the host. What's not here yet: network/socket telemetry, container/
-service identity, distributed tracing, export, and storage — all later
+`pulse-agent` on Linux and it logs every process that starts or exits,
+and every outbound TCP connection attempt, on the host. What's not here
+yet: byte-level socket data, container/service identity, distributed
+tracing, export, and storage — all later
 in the roadmap.
 
 ## Getting started

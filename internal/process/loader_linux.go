@@ -66,7 +66,7 @@ func (l *Loader) Load() error {
 
 	// Captured now, at Load time, so it's available before the first
 	// event ever arrives.
-	l.refMonotonicNS, l.refWallClock = monotonicReference()
+	l.refMonotonicNS, l.refWallClock = ebpf.MonotonicReference()
 
 	l.loaded = true
 	return nil

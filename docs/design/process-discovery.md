@@ -74,7 +74,9 @@ needs a real `time.Time`. `Loader.Load` captures a reference pair
 load time; `Read` converts each event's raw monotonic timestamp to
 wall-clock time by adding its delta from that reference onto the
 reference's wall-clock side. This is the standard technique for turning
-BPF kernel timestamps into real time — see `clock_linux.go`.
+BPF kernel timestamps into real time — see `internal/ebpf.MonotonicReference`,
+shared with `internal/network` (Day 05), which needs the identical
+conversion for exactly the same reason.
 
 **Decode → normalize, kept separate.** `decodeRawEvent` (wire bytes →
 `rawEvent`, still holding a raw monotonic timestamp) and `ToEvent`

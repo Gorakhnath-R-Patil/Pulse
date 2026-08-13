@@ -39,7 +39,7 @@ type ProcessEvent struct {
 
 // rawEvent is ProcessEvent before its kernel CLOCK_MONOTONIC timestamp
 // (not wall-clock time) has been converted to a real time.Time — see
-// loader_linux.go's monotonicReference for why that conversion needs a
+// internal/ebpf's MonotonicReference for why that conversion needs a
 // reference pair captured at Load time, and so can't happen in the pure
 // decode step below.
 type rawEvent struct {

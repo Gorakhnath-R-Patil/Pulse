@@ -1,6 +1,6 @@
 //go:build linux
 
-package process
+package ebpf
 
 import (
 	"time"
@@ -8,18 +8,19 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// monotonicReference returns the current CLOCK_MONOTONIC time in
-// nanoseconds — matching the kernel's bpf_ktime_get_ns(), which
-// process.c stamps every event with — paired with the corresponding
-// wall-clock time. ProcessEvent.Timestamp values are computed by adding
-// a later event's monotonic delta from this reference onto wallClock;
-// see loader_linux.go's Read.
+// MonotonicReference returns the current CLOCK_MONOTONIC time in
+// nanoseconds — matching the kernel's bpf_ktime_get_ns(), which every
+// program under bpf/programs/ stamps its events with — paired with the
+// corresponding wall-clock time.
 //
 // bpf_ktime_get_ns() reports time since boot (CLOCK_MONOTONIC), not
 // since the Unix epoch, so a raw reading can't be turned into a
-// time.Time on its own — this reference pair is what makes that
-// conversion possible.
-func monotonicReference() (monotonicNS uint64, wallClock time.Time) {
+// time.Time on its own. Callers capture one reference pair (typically
+// at Load time) and convert each later event's raw monotonic timestamp
+// to wall-clock time by adding its delta from the reference's
+// monotonic side onto the reference's wall-clock side — see
+// internal/process and internal/network's Loader.Read for the pattern.
+func MonotonicReference() (monotonicNS uint64, wallClock time.Time) {
 	var ts unix.Timespec
 	wallClock = time.Now()
 	if err := unix.ClockGettime(unix.CLOCK_MONOTONIC, &ts); err != nil {
