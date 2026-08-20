@@ -6,12 +6,36 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/config"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/process"
 )
+
+// syncBuffer is a mutex-protected bytes.Buffer. The *EndToEnd tests in
+// this package (and in network_test.go, socket_test.go) run a pipeline
+// in a background goroutine and poll its log output from the test
+// goroutine while it's still writing — a plain bytes.Buffer is not
+// safe for that, so every test capturing a running pipeline's log
+// output uses this instead.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
 
 // fakeProcessLoader is a processLoader test double: it never touches a
 // real kernel, so these tests exercise this package's wiring logic
@@ -62,10 +86,10 @@ func (f *fakeProcessLoader) Read() (process.ProcessEvent, error) {
 	return process.ProcessEvent{}, f.terminalErr
 }
 
-func testApp() (*App, *bytes.Buffer) {
-	var buf bytes.Buffer
-	logger := slog.New(slog.NewJSONHandler(&buf, nil))
-	return New(config.AgentConfig{NodeName: "pulse-node-1"}, logger), &buf
+func testApp() (*App, *syncBuffer) {
+	buf := &syncBuffer{}
+	logger := slog.New(slog.NewJSONHandler(buf, nil))
+	return New(config.AgentConfig{NodeName: "pulse-node-1"}, logger), buf
 }
 
 func TestProcessSource_Read_NormalizesEvent(t *testing.T) {
