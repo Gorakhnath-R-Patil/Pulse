@@ -1,7 +1,7 @@
 // Package agent contains the pulse-agent application: startup,
 // structured logging of its identity, best-effort telemetry capture
-// (process discovery, network connection telemetry), and graceful
-// shutdown on context cancellation.
+// (process discovery, network connection telemetry, socket data
+// telemetry), and graceful shutdown on context cancellation.
 package agent
 
 import (
@@ -11,6 +11,7 @@ import (
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/config"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/network"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/process"
+	"github.com/Gorakhnath-R-Patil/Pulse/internal/socket"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/version"
 )
 
@@ -30,11 +31,11 @@ func New(cfg config.AgentConfig, logger *slog.Logger) *App {
 // Run starts the agent and blocks until ctx is canceled, then shuts down
 // cleanly. It returns nil on a normal, context-driven shutdown.
 //
-// Each telemetry capability (process.go, network.go) is started on a
-// best-effort basis: on a platform or kernel that doesn't support it,
-// or without sufficient privilege, Run logs why and continues running
-// without it rather than failing to start. Telemetry capture is never
-// allowed to be a reason pulse-agent itself won't run.
+// Each telemetry capability (process.go, network.go, socket.go) is
+// started on a best-effort basis: on a platform or kernel that doesn't
+// support it, or without sufficient privilege, Run logs why and
+// continues running without it rather than failing to start. Telemetry
+// capture is never allowed to be a reason pulse-agent itself won't run.
 func (a *App) Run(ctx context.Context) error {
 	a.logger.Info("pulse-agent starting",
 		"node_name", a.cfg.NodeName,
@@ -54,6 +55,13 @@ func (a *App) Run(ctx context.Context) error {
 		a.logger.Warn("network connection telemetry unavailable", "error", err)
 	} else {
 		defer networkLoader.Close()
+	}
+
+	socketLoader := socket.NewLoader()
+	if err := a.startSocketTelemetry(ctx, socketLoader); err != nil {
+		a.logger.Warn("socket data telemetry unavailable", "error", err)
+	} else {
+		defer socketLoader.Close()
 	}
 
 	<-ctx.Done()

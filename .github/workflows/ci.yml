@@ -61,7 +61,7 @@ jobs:
       # package's platform-independent contract; this step re-runs just
       # the loader tests with root to exercise the real load -> attach
       # -> receive -> detach lifecycle against the runner's actual
-      # kernel, including internal/network's real-TCP-connect
-      # integration test.
+      # kernel, including the real-TCP-connect and real-TCP-close
+      # integration tests.
       - name: Test eBPF loaders (privileged)
-        run: sudo -E env "PATH=$PATH" go test ./internal/ebpf/... ./internal/process/... ./internal/network/... -v -run TestLoader
+        run: sudo -E env "PATH=$PATH" go test ./internal/ebpf/... ./internal/process/... ./internal/network/... ./internal/socket/... -v -run TestLoader

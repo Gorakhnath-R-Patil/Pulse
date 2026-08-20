@@ -14,10 +14,10 @@ type Endpoint struct {
 }
 
 // Network describes the network endpoints involved in an observed
-// activity. Byte counters (Day 6), protocol-specific detail such as HTTP
-// method/status or DNS query/response (Day 9/10), and latency (Day 9)
-// are deliberately not fields here — see docs/design/event-model.md for
-// where they land instead as those days implement them.
+// activity. Protocol-specific detail such as HTTP method/status or DNS
+// query/response (Day 9/10), and latency (Day 9), are deliberately not
+// fields here — see docs/design/event-model.md for where they land
+// instead as those days implement them.
 type Network struct {
 	// Protocol is the transport (or application) protocol name, e.g.
 	// "tcp", "udp". Lowercase by convention.
@@ -25,6 +25,14 @@ type Network struct {
 
 	Source      Endpoint `json:"source"`
 	Destination Endpoint `json:"destination"`
+
+	// BytesSent and BytesReceived are cumulative byte counts for the
+	// connection at observation time, if known. Zero means "unknown or
+	// not applicable," not "confirmed zero bytes transferred" — most
+	// events (e.g. a bare connection attempt) simply don't have this
+	// information yet.
+	BytesSent     uint64 `json:"bytes_sent,omitempty"`
+	BytesReceived uint64 `json:"bytes_received,omitempty"`
 }
 
 // Validate reports whether n is a well-formed Network reference. A nil

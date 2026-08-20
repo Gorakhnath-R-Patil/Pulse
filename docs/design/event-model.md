@@ -66,7 +66,10 @@ hasn't been built:
 | Field(s)                              | Deferred to                                    | Why                                                                 |
 |----------------------------------------|-------------------------------------------------|----------------------------------------------------------------------|
 | `container_id`, `namespace`, `pod`, `service` | Day 08 — Service Identity            | Day 08's own stated deliverable is designing this identity model; adding it now would preempt that design. |
-| `bytes` (sent/received)                | Day 06 — Socket Data Telemetry        | Introduced as part of that day's own new capability.                |
+
+`bytes` (sent/received) was in this table through Day 05; it's now
+`Network.BytesSent`/`BytesReceived`, added Day 06 as that day's own new
+capability — see `docs/design/socket-data.md`.
 | `latency`, `status`                    | Day 09 — HTTP Visibility               | Meaningful once there's a protocol (HTTP) they describe.            |
 | `trace_id`, `span_id`                  | Day 11 — Distributed Trace Model      | Day 11's stated deliverable; correlating events into traces is a distinct concern from describing one event. |
 

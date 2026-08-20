@@ -94,12 +94,19 @@ behind specific technical choices as they're made, day by day.
   connect succeeded — normalized into `pkg/model.Event` and logged by
   `pulse-agent` alongside process events. See
   [docs/design/network-connect.md](docs/design/network-connect.md).
+- Socket data telemetry ([`internal/socket`](internal/socket)): real TCP
+  connection close events, captured in-kernel via
+  [`bpf/programs/tcp_close.c`](bpf/programs/tcp_close.c) — bytes sent,
+  bytes received, and any pending socket error — plus a bounded,
+  drop-and-count buffer between reading events and logging them, so a
+  slow consumer degrades gracefully instead of unbounded memory growth.
+  See [docs/design/socket-data.md](docs/design/socket-data.md).
 
 This is real, kernel-observed telemetry, not a placeholder — run
 `pulse-agent` on Linux and it logs every process that starts or exits,
-and every outbound TCP connection attempt, on the host. What's not here
-yet: byte-level socket data, container/service identity, distributed
-tracing, export, and storage — all later
+every outbound TCP connection attempt, and every connection's byte
+counts at close, on the host. What's not here yet: container/service
+identity, distributed tracing, export, and storage — all later
 in the roadmap.
 
 ## Getting started

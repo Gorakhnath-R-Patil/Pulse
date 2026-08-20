@@ -82,16 +82,17 @@ go generate ./...
 
 This regenerates the bpf2go bindings for `internal/ebpf` (from
 `bpf/programs/foundation.c`), `internal/process` (from
-`bpf/programs/process.c`), and `internal/network` (from
-`bpf/programs/tcp_connect.c`). Re-run it whenever you change a file
-under `bpf/programs/` or `bpf/headers/`.
+`bpf/programs/process.c`), `internal/network` (from
+`bpf/programs/tcp_connect.c`), and `internal/socket` (from
+`bpf/programs/tcp_close.c`). Re-run it whenever you change a file under
+`bpf/programs/` or `bpf/headers/`.
 
 Loading the resulting programs into the kernel (as opposed to just
 compiling them) additionally requires root or `CAP_BPF`+`CAP_PERFMON`:
 
 ```bash
-go test ./internal/ebpf/... ./internal/process/... ./internal/network/...              # unprivileged: everything except the real load/attach/receive/detach cycle
-sudo -E env "PATH=$PATH" go test ./internal/ebpf/... ./internal/process/... ./internal/network/... -run TestLoader   # exercises it for real
+go test ./internal/ebpf/... ./internal/process/... ./internal/network/... ./internal/socket/...              # unprivileged: everything except the real load/attach/receive/detach cycle
+sudo -E env "PATH=$PATH" go test ./internal/ebpf/... ./internal/process/... ./internal/network/... ./internal/socket/... -run TestLoader   # exercises it for real
 ```
 
 Without root, the privileged tests skip themselves with an explanatory
@@ -121,6 +122,7 @@ internal/version/    Build-time version/commit/date, injected via -ldflags.
 internal/ebpf/       eBPF load/attach/receive/detach lifecycle. Linux-only; stubs elsewhere.
 internal/process/    Process discovery: kernel capture, decode, normalize to pkg/model.Event.
 internal/network/    Network connection telemetry: same shape as internal/process, for TCP connect.
+internal/socket/     Socket data telemetry: byte counters + connection close, same shape again.
 pkg/model/           Canonical telemetry Event and its sub-structures — the shared data contract.
 proto/               Wire-format contracts (.proto), checked in ahead of any code generation.
 bpf/programs/        Hand-written eBPF C source.
