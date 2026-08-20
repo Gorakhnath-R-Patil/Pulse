@@ -1,101 +1,52 @@
 package agent
 
 import (
-	"context"
-	"sync/atomic"
-
+	"github.com/Gorakhnath-R-Patil/Pulse/internal/pipeline"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/socket"
+	"github.com/Gorakhnath-R-Patil/Pulse/pkg/model"
 )
 
-// socketEventBufferSize bounds the queue between reading socket close
-// events off the ring buffer and logging them. It exists so a slow or
-// stalled consumer degrades to dropped (and counted) events instead of
-// blocking the read loop indefinitely — the read loop's job is to drain
-// the kernel ring buffer promptly, not to buffer for a slow consumer.
-// This is deliberately the simplest possible bounded buffer, not
-// Day 07's fuller pipeline (worker pools, multi-stage backpressure);
-// see docs/design/socket-data.md.
-const socketEventBufferSize = 256
-
-// socketLoader is the subset of *socket.Loader's method set
-// startSocketTelemetry needs, letting tests substitute a fake without
-// touching a real kernel. Mirrors processLoader/networkLoader.
+// socketLoader is the subset of *socket.Loader's method set this
+// package needs, letting tests substitute a fake without touching a
+// real kernel. Mirrors processLoader in process.go.
 type socketLoader interface {
 	Load() error
 	Attach() error
 	Read() (socket.CloseEvent, error)
+	Close() error
 }
 
-// startSocketTelemetry loads and attaches loader, then starts the
-// bounded read/log pipeline described on socketEventBufferSize running
-// until ctx is canceled. On failure, loader has already been left in a
-// state safe for the caller to Close() harmlessly, and nothing is
-// started.
-func (a *App) startSocketTelemetry(ctx context.Context, loader socketLoader) error {
-	if err := loader.Load(); err != nil {
-		return err
-	}
-	if err := loader.Attach(); err != nil {
-		return err
-	}
-
-	a.logger.Info("socket data telemetry active")
-
-	events := make(chan socket.CloseEvent, socketEventBufferSize)
-	go a.readSocketEvents(ctx, loader, events)
-	go a.logSocketEvents(events)
-	return nil
+// socketSource adapts a socketLoader to pipeline.EventSource via
+// socket.ToEvent.
+type socketSource struct {
+	loader   socketLoader
+	nodeName string
 }
 
-// readSocketEvents drains loader as fast as the kernel delivers events,
-// forwarding each one to out without blocking: if out is full, the
-// event is dropped and counted rather than backing up the read loop.
-// Returns (closing out) once Read fails — see watchProcessEvents in
-// process.go for why a shutdown-triggered failure is silent and an
-// unexpected one is warned.
-func (a *App) readSocketEvents(ctx context.Context, loader socketLoader, out chan<- socket.CloseEvent) {
-	defer close(out)
-
-	var dropped atomic.Uint64
-	for {
-		event, err := loader.Read()
-		if err != nil {
-			if ctx.Err() == nil {
-				a.logger.Warn("socket telemetry read failed", "error", err)
-			}
-			return
-		}
-
-		select {
-		case out <- event:
-		default:
-			n := dropped.Add(1)
-			// Logged on the first drop and every 100th after, so a
-			// sustained overload doesn't itself become a log-volume
-			// problem while still surfacing that it's happening.
-			if n == 1 || n%100 == 0 {
-				a.logger.Warn("socket telemetry buffer full, dropping event", "dropped_total", n)
-			}
-		}
+func (s socketSource) Read() (model.Event, error) {
+	event, err := s.loader.Read()
+	if err != nil {
+		return model.Event{}, err
 	}
+	return socket.ToEvent(event, s.nodeName), nil
 }
 
-// logSocketEvents normalizes and logs every event sent to in, until in
-// is closed (by readSocketEvents, once its Read loop ends).
-func (a *App) logSocketEvents(in <-chan socket.CloseEvent) {
-	for event := range in {
-		modelEvent := socket.ToEvent(event, a.cfg.NodeName)
-		a.logger.Info("socket close event",
-			"type", modelEvent.Type,
-			"pid", event.PID,
-			"command", event.Comm,
-			"source", modelEvent.Network.Source.Address,
-			"source_port", event.SourcePort,
-			"destination", modelEvent.Network.Destination.Address,
-			"destination_port", event.DestPort,
-			"bytes_sent", event.BytesSent,
-			"bytes_received", event.BytesReceived,
-			"sock_error", event.SockError,
-		)
-	}
+// newSocketPipeline builds the socket data telemetry pipeline. See
+// newProcessPipeline's doc comment for the Load/Attach/Close contract.
+//
+// Day 06 introduced a hand-rolled bounded, drop-on-full channel here as
+// the simplest thing that satisfied that day's "introduce bounded
+// buffering" requirement. This pipeline (shared with process.go and
+// network.go, both of which had their own equivalent hand-rolled read
+// loops) supersedes it: the same bound now comes from
+// pipeline.Config.QueueSize, and events aren't dropped under
+// backpressure — the reader blocks instead. See
+// docs/design/event-pipeline.md.
+func (a *App) newSocketPipeline(loader socketLoader) *pipeline.Pipeline {
+	return pipeline.New(
+		pipeline.Config{Name: "socket data telemetry", Workers: 2, QueueSize: 256},
+		socketSource{loader: loader, nodeName: a.cfg.NodeName},
+		a.logger,
+		&pipeline.LoggingProcessor{Logger: a.logger},
+	)
 }

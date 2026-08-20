@@ -97,10 +97,14 @@ behind specific technical choices as they're made, day by day.
 - Socket data telemetry ([`internal/socket`](internal/socket)): real TCP
   connection close events, captured in-kernel via
   [`bpf/programs/tcp_close.c`](bpf/programs/tcp_close.c) — bytes sent,
-  bytes received, and any pending socket error — plus a bounded,
-  drop-and-count buffer between reading events and logging them, so a
-  slow consumer degrades gracefully instead of unbounded memory growth.
-  See [docs/design/socket-data.md](docs/design/socket-data.md).
+  bytes received, and any pending socket error. See
+  [docs/design/socket-data.md](docs/design/socket-data.md).
+- A shared event pipeline ([`internal/pipeline`](internal/pipeline)):
+  every capability above now runs through the same bounded-queue,
+  worker-pool pipeline with real backpressure (the reader blocks rather
+  than dropping events when the queue is full) and graceful shutdown
+  that drains in-flight work before exiting. See
+  [docs/design/event-pipeline.md](docs/design/event-pipeline.md).
 
 This is real, kernel-observed telemetry, not a placeholder — run
 `pulse-agent` on Linux and it logs every process that starts or exits,

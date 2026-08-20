@@ -5,6 +5,17 @@ Package: [`internal/socket`](../../internal/socket). eBPF program:
 the same shape as [Network Connection Telemetry](network-connect.md),
 which this document assumes as background and doesn't re-explain.
 
+> **Superseded by Day 07:** the hand-rolled bounded, drop-on-full
+> channel this document originally described
+> (`internal/agent/socket.go`'s `socketEventBufferSize`,
+> `readSocketEvents`, `logSocketEvents`) was replaced by the shared
+> pipeline in [`internal/pipeline`](event-pipeline.md), which applies
+> real backpressure instead of dropping events. The design reasoning
+> below (why bytes/errors are captured where they are, why fentry, the
+> byte-order handling) is unchanged and still accurate; only the
+> "introduce bounded buffering" mechanism moved — see
+> [event-pipeline.md](event-pipeline.md) for its replacement.
+
 ## Problem
 
 A connect event (Day 05) says a connection started; nothing so far says
@@ -19,8 +30,8 @@ day also calls for.
 
 ```
 tcp_close.c (kernel)                       internal/socket (userspace)          internal/agent
-└── fentry/tcp_close ─→ ringbuf ─→         ├── decodeRawEvent (pure, tested) ─→  readSocketEvents ─→ bounded chan ─→ logSocketEvents
-    (sock_common + tcp_sock CO-RE,         └── ToEvent (pure, tested,                                (drop + count on full)
+└── fentry/tcp_close ─→ ringbuf ─→         ├── decodeRawEvent (pure, tested) ─→  socketSource ─→ internal/pipeline
+    (sock_common + tcp_sock CO-RE,         └── ToEvent (pure, tested,                            (see event-pipeline.md)
      bpf_skc_to_tcp_sock, same                  benchmarked)
      pattern as tcp_connect.c)
 ```
@@ -45,17 +56,16 @@ record is downstream work — this package's job is making sure each
 event is self-describing enough for that correlation to be possible
 later, not performing it now.
 
-**Bounded buffering, deliberately smaller than Day 07's pipeline.**
-`internal/agent`'s `readSocketEvents`/`logSocketEvents` (in
-`internal/agent/socket.go`) are a single bounded channel between
-draining the ring buffer and logging: the read side never blocks on a
-slow consumer, dropping (and counting) an event instead when the
-256-capacity buffer is full. This is intentionally the simplest thing
-that satisfies "introduce bounded buffering," not an early draft of
-Day 07's fuller pipeline (worker pools, multi-stage backpressure,
-graceful shutdown across stages) — see that day's own design doc when
-it exists for the real pipeline architecture this is a precursor to,
-not a substitute for.
+**Bounded buffering, originally a stopgap, now the real pipeline.** At
+the time this program was written, `internal/agent` had a single
+bounded channel between draining the ring buffer and logging, dropping
+(and counting) an event when a 256-capacity buffer was full — the
+simplest thing that satisfied this day's "introduce bounded buffering"
+requirement. Day 07 replaced it with [`internal/pipeline`](event-pipeline.md),
+shared across all three telemetry capabilities, applying real
+backpressure (blocking, not dropping) instead. See that document for
+the current mechanism; this section is kept for the historical
+reasoning behind introducing bounded buffering here in the first place.
 
 **`Network.BytesSent`/`BytesReceived`, added to `pkg/model` today.**
 Day 02's event model deliberately left these out, noting they'd arrive
@@ -78,14 +88,17 @@ is that day.
 
 ## Tradeoffs
 
-- **Drop-and-count over blocking or growing the buffer.** A slow log
-  sink should never make the kernel ring buffer back up (which risks the
-  kernel-side drops `tcp_close.c` already has no way to avoid once *its*
-  buffer fills) or make the read goroutine's memory usage unbounded. A
-  fixed-capacity channel with a counted drop is the simplest policy that
-  keeps both bounded; a smarter policy (e.g. sampling, priority for
-  events with a nonzero `sock_error`) is a real future improvement, not
-  a Day 06 requirement.
+- **Drop-and-count over blocking or growing the buffer (as originally
+  built; see the superseded note at the top of this document).** A slow
+  log sink should never make the kernel ring buffer back up (which risks
+  the kernel-side drops `tcp_close.c` already has no way to avoid once
+  *its* buffer fills) or make the read goroutine's memory usage
+  unbounded. A fixed-capacity channel with a counted drop was the
+  simplest policy that kept both bounded at the time; Day 07's pipeline
+  replaced it with blocking backpressure instead — see
+  [event-pipeline.md](event-pipeline.md#design) for why blocking turned
+  out to be the better default once there was a shared abstraction
+  across all three capabilities to put it in.
 - **`sk_err` reported as a raw errno-shaped integer, not decoded.**
   Translating it to a human string (`"ECONNRESET"`) is a small,
   legitimate userspace enrichment step, deferred rather than done here
@@ -105,11 +118,11 @@ package:
   without emitting an event — `tcp_close` fires for non-TCP socket types
   too (its tracepoint isn't TCP-specific the way `tcp_v4_connect` is),
   and this is the expected, silent way of ignoring those.
-- **Bounded buffer full:** the event is dropped and counted in
-  userspace (see Tradeoffs) — a distinct, additional drop point beyond
-  the kernel ring buffer's own capacity, logged on the first drop and
-  every 100th after so a sustained overload doesn't itself flood the
-  log.
+- **Pipeline queue full:** as of Day 07, the reader blocks (real
+  backpressure) rather than dropping — see
+  [event-pipeline.md](event-pipeline.md#failure-modes). Originally (see
+  Tradeoffs) this was a distinct, counted userspace drop point; that
+  policy no longer applies.
 
 ## Performance
 
@@ -147,6 +160,5 @@ code, not application data.
   not a stream of incremental deltas — there's no visibility into a
   still-open, long-lived connection's byte counts from this program
   alone.
-- The bounded buffer's capacity (256) is a hardcoded constant, not yet
-  configurable — see `internal/agent/socket.go`'s
-  `socketEventBufferSize`.
+- The pipeline's queue capacity and worker count are hardcoded literals,
+  not yet configurable — see [event-pipeline.md](event-pipeline.md#whats-deliberately-not-here-yet).

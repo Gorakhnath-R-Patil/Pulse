@@ -1,63 +1,44 @@
 package agent
 
 import (
-	"context"
-
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/network"
+	"github.com/Gorakhnath-R-Patil/Pulse/internal/pipeline"
+	"github.com/Gorakhnath-R-Patil/Pulse/pkg/model"
 )
 
-// networkLoader is the subset of *network.Loader's method set
-// startNetworkTelemetry needs, letting tests substitute a fake without
-// touching a real kernel. Mirrors processLoader in process.go — see
-// docs/design/network-connect.md for why this is a second, near-
-// identical instance of the pattern rather than a shared abstraction.
+// networkLoader is the subset of *network.Loader's method set this
+// package needs, letting tests substitute a fake without touching a
+// real kernel. Mirrors processLoader in process.go.
 type networkLoader interface {
 	Load() error
 	Attach() error
 	Read() (network.ConnectEvent, error)
+	Close() error
 }
 
-// startNetworkTelemetry loads and attaches loader, then starts a
-// background goroutine logging every event it reports until ctx is
-// canceled. On failure, loader has already been left in a state safe
-// for the caller to Close() harmlessly, and no goroutine is started.
-func (a *App) startNetworkTelemetry(ctx context.Context, loader networkLoader) error {
-	if err := loader.Load(); err != nil {
-		return err
-	}
-	if err := loader.Attach(); err != nil {
-		return err
-	}
-
-	a.logger.Info("network connection telemetry active")
-	go a.watchNetworkEvents(ctx, loader)
-	return nil
+// networkSource adapts a networkLoader to pipeline.EventSource via
+// network.ToEvent.
+type networkSource struct {
+	loader   networkLoader
+	nodeName string
 }
 
-// watchNetworkEvents logs every TCP connect event loader reports until
-// Read fails — which happens once, by design, when ctx is canceled and
-// the caller closes loader (see Run). See watchProcessEvents in
-// process.go for why every event is logged at info level for now.
-func (a *App) watchNetworkEvents(ctx context.Context, loader networkLoader) {
-	for {
-		event, err := loader.Read()
-		if err != nil {
-			if ctx.Err() == nil {
-				a.logger.Warn("network connection telemetry read failed", "error", err)
-			}
-			return
-		}
-
-		modelEvent := network.ToEvent(event, a.cfg.NodeName)
-		a.logger.Info("network connect event",
-			"type", modelEvent.Type,
-			"pid", event.PID,
-			"command", event.Comm,
-			"source", modelEvent.Network.Source.Address,
-			"source_port", event.SourcePort,
-			"destination", modelEvent.Network.Destination.Address,
-			"destination_port", event.DestPort,
-			"success", event.Success,
-		)
+func (s networkSource) Read() (model.Event, error) {
+	event, err := s.loader.Read()
+	if err != nil {
+		return model.Event{}, err
 	}
+	return network.ToEvent(event, s.nodeName), nil
+}
+
+// newNetworkPipeline builds the network connection telemetry pipeline.
+// See newProcessPipeline's doc comment for the Load/Attach/Close
+// contract.
+func (a *App) newNetworkPipeline(loader networkLoader) *pipeline.Pipeline {
+	return pipeline.New(
+		pipeline.Config{Name: "network connection telemetry", Workers: 2, QueueSize: 256},
+		networkSource{loader: loader, nodeName: a.cfg.NodeName},
+		a.logger,
+		&pipeline.LoggingProcessor{Logger: a.logger},
+	)
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/network"
 )
@@ -14,6 +15,7 @@ import (
 type fakeNetworkLoader struct {
 	loadErr     error
 	attachErr   error
+	closeErr    error
 	events      []network.ConnectEvent
 	terminalErr error
 	block       chan struct{}
@@ -23,6 +25,17 @@ type fakeNetworkLoader struct {
 
 func (f *fakeNetworkLoader) Load() error   { return f.loadErr }
 func (f *fakeNetworkLoader) Attach() error { return f.attachErr }
+
+func (f *fakeNetworkLoader) Close() error {
+	if f.block != nil {
+		select {
+		case <-f.block:
+		default:
+			close(f.block)
+		}
+	}
+	return f.closeErr
+}
 
 func (f *fakeNetworkLoader) Read() (network.ConnectEvent, error) {
 	if f.i < len(f.events) {
@@ -36,85 +49,75 @@ func (f *fakeNetworkLoader) Read() (network.ConnectEvent, error) {
 	return network.ConnectEvent{}, f.terminalErr
 }
 
-func TestStartNetworkTelemetry_LoadFails(t *testing.T) {
-	app, _ := testApp()
-	wantErr := errors.New("load failed")
-	fake := &fakeNetworkLoader{loadErr: wantErr}
+func TestNetworkSource_Read_NormalizesEvent(t *testing.T) {
+	fake := &fakeNetworkLoader{events: []network.ConnectEvent{
+		{PID: 100, Comm: "curl", SourcePort: 51000, DestPort: 443, Success: true},
+	}}
+	src := networkSource{loader: fake, nodeName: "pulse-node-1"}
 
-	err := app.startNetworkTelemetry(context.Background(), fake)
+	event, err := src.Read()
+	if err != nil {
+		t.Fatalf("Read() returned error: %v", err)
+	}
+	if event.Type != "network.connect" {
+		t.Errorf("Type = %q, want %q", event.Type, "network.connect")
+	}
+	if event.Network == nil || event.Network.Source.Port != 51000 || event.Network.Destination.Port != 443 {
+		t.Errorf("Network = %+v, want source port 51000, destination port 443", event.Network)
+	}
+	if event.Attributes["tcp.connect_success"] != "true" {
+		t.Errorf(`Attributes["tcp.connect_success"] = %q, want "true"`, event.Attributes["tcp.connect_success"])
+	}
+}
+
+func TestNetworkSource_Read_PropagatesLoaderError(t *testing.T) {
+	wantErr := errors.New("read failed")
+	src := networkSource{loader: &fakeNetworkLoader{terminalErr: wantErr}, nodeName: "pulse-node-1"}
+
+	_, err := src.Read()
 	if !errors.Is(err, wantErr) {
-		t.Fatalf("startNetworkTelemetry() error = %v, want %v", err, wantErr)
+		t.Fatalf("Read() error = %v, want %v", err, wantErr)
 	}
 }
 
-func TestStartNetworkTelemetry_AttachFails(t *testing.T) {
-	app, _ := testApp()
-	wantErr := errors.New("attach failed")
-	fake := &fakeNetworkLoader{attachErr: wantErr}
-
-	err := app.startNetworkTelemetry(context.Background(), fake)
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("startNetworkTelemetry() error = %v, want %v", err, wantErr)
-	}
-}
-
-func TestStartNetworkTelemetry_SuccessLogsActiveAndStartsWatcher(t *testing.T) {
-	app, buf := testApp()
-	fake := &fakeNetworkLoader{block: make(chan struct{})}
-
-	if err := app.startNetworkTelemetry(context.Background(), fake); err != nil {
-		t.Fatalf("startNetworkTelemetry() returned error: %v", err)
-	}
-
-	if !strings.Contains(buf.String(), "network connection telemetry active") {
-		t.Errorf("log output missing startup confirmation: %s", buf.String())
-	}
-}
-
-func TestWatchNetworkEvents_LogsEachEvent(t *testing.T) {
+func TestNetworkPipeline_LogsEventsEndToEnd(t *testing.T) {
 	app, buf := testApp()
 	fake := &fakeNetworkLoader{
 		events: []network.ConnectEvent{
 			{PID: 100, Comm: "curl", SourcePort: 51000, DestPort: 443, Success: true},
 		},
-		terminalErr: errors.New("simulated read failure"),
+		block: make(chan struct{}),
 	}
 
-	app.watchNetworkEvents(context.Background(), fake)
-
-	out := buf.String()
-	if !strings.Contains(out, `"pid":100`) {
-		t.Errorf("log output missing the observed event's pid: %s", out)
-	}
-	if !strings.Contains(out, "network.connect") {
-		t.Errorf("log output missing the event type: %s", out)
-	}
-	if !strings.Contains(out, `"success":true`) {
-		t.Errorf("log output missing the success flag: %s", out)
-	}
-}
-
-func TestWatchNetworkEvents_UnexpectedReadFailureIsWarned(t *testing.T) {
-	app, buf := testApp()
-	fake := &fakeNetworkLoader{terminalErr: errors.New("boom")}
-
-	app.watchNetworkEvents(context.Background(), fake)
-
-	if !strings.Contains(buf.String(), "network connection telemetry read failed") {
-		t.Errorf("log output missing the read-failure warning: %s", buf.String())
-	}
-}
-
-func TestWatchNetworkEvents_ShutdownReadFailureIsSilent(t *testing.T) {
-	app, buf := testApp()
-	fake := &fakeNetworkLoader{terminalErr: errors.New("reader closed")}
+	p := app.newNetworkPipeline(fake)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		p.Run(ctx)
+		close(done)
+	}()
+
+	deadline := time.After(2 * time.Second)
+	for !strings.Contains(buf.String(), `"pid":100`) {
+		select {
+		case <-deadline:
+			t.Fatalf("log output never contained the observed event's pid: %s", buf.String())
+		case <-time.After(time.Millisecond):
+		}
+	}
+
+	if !strings.Contains(buf.String(), "network.connect") {
+		t.Errorf("log output missing the event type: %s", buf.String())
+	}
+
 	cancel()
-
-	app.watchNetworkEvents(ctx, fake)
-
-	if strings.Contains(buf.String(), "read failed") {
-		t.Errorf("expected no warning for a shutdown-triggered read failure, got: %s", buf.String())
+	fake.Close()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("pipeline did not shut down after the loader was closed")
 	}
 }

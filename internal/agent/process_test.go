@@ -7,26 +7,26 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/config"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/process"
 )
 
 // fakeProcessLoader is a processLoader test double: it never touches a
-// real kernel, so these tests exercise App's wiring logic (does it call
-// Load/Attach/Read correctly, does it log what it should, does it treat
-// a shutdown-triggered read failure differently from an unexpected one)
-// without needing Linux or root, unlike internal/process's own loader
-// tests.
+// real kernel, so these tests exercise this package's wiring logic
+// (does processSource normalize correctly, does the resulting pipeline
+// actually log what it reads) without needing Linux or root, unlike
+// internal/process's own loader tests.
 //
 // block, if non-nil, makes Read block forever once events is exhausted
-// instead of returning terminalErr — used to test the goroutine
-// startProcessDiscovery spawns without racing on what it logs
-// afterward: a Read that never returns never writes to the test's log
-// buffer, so asserting on that buffer immediately is safe.
+// instead of returning terminalErr — used so a pipeline built around
+// this fake can be left running without ever reaching a log call that
+// would race a test's later buf.String() read.
 type fakeProcessLoader struct {
 	loadErr     error
 	attachErr   error
+	closeErr    error
 	events      []process.ProcessEvent
 	terminalErr error
 	block       chan struct{}
@@ -36,6 +36,19 @@ type fakeProcessLoader struct {
 
 func (f *fakeProcessLoader) Load() error   { return f.loadErr }
 func (f *fakeProcessLoader) Attach() error { return f.attachErr }
+
+// Close mirrors a real Loader: it unblocks a Read call parked on block,
+// the same way closing the underlying ring buffer reader would.
+func (f *fakeProcessLoader) Close() error {
+	if f.block != nil {
+		select {
+		case <-f.block:
+		default:
+			close(f.block)
+		}
+	}
+	return f.closeErr
+}
 
 func (f *fakeProcessLoader) Read() (process.ProcessEvent, error) {
 	if f.i < len(f.events) {
@@ -55,88 +68,99 @@ func testApp() (*App, *bytes.Buffer) {
 	return New(config.AgentConfig{NodeName: "pulse-node-1"}, logger), &buf
 }
 
-func TestStartProcessDiscovery_LoadFails(t *testing.T) {
-	app, _ := testApp()
-	wantErr := errors.New("load failed")
-	fake := &fakeProcessLoader{loadErr: wantErr}
+func TestProcessSource_Read_NormalizesEvent(t *testing.T) {
+	fake := &fakeProcessLoader{events: []process.ProcessEvent{
+		{PID: 100, PPID: 1, Comm: "sh", Type: process.EventStart},
+	}}
+	src := processSource{loader: fake, nodeName: "pulse-node-1"}
 
-	err := app.startProcessDiscovery(context.Background(), fake)
+	event, err := src.Read()
+	if err != nil {
+		t.Fatalf("Read() returned error: %v", err)
+	}
+	if event.Type != "process.start" {
+		t.Errorf("Type = %q, want %q", event.Type, "process.start")
+	}
+	if event.Host != "pulse-node-1" {
+		t.Errorf("Host = %q, want %q", event.Host, "pulse-node-1")
+	}
+	if event.Process == nil || event.Process.PID != 100 || event.Process.Command != "sh" {
+		t.Errorf("Process = %+v, want PID=100 Command=sh", event.Process)
+	}
+}
+
+func TestProcessSource_Read_ExitEventNeverResolvesExecutable(t *testing.T) {
+	// Deterministic and platform-independent, unlike asserting that
+	// resolution *succeeds* for a start event (which depends on a real,
+	// currently-running PID and is already covered by
+	// internal/process's own ResolveExecutable tests): an exit event's
+	// process is gone by definition, so Read must not even attempt it.
+	fake := &fakeProcessLoader{events: []process.ProcessEvent{
+		{PID: 100, Comm: "sh", Type: process.EventExit},
+	}}
+	src := processSource{loader: fake, nodeName: "pulse-node-1"}
+
+	event, err := src.Read()
+	if err != nil {
+		t.Fatalf("Read() returned error: %v", err)
+	}
+	if event.Process.Executable != "" {
+		t.Errorf("Process.Executable = %q, want empty for an exit event", event.Process.Executable)
+	}
+}
+
+func TestProcessSource_Read_PropagatesLoaderError(t *testing.T) {
+	wantErr := errors.New("read failed")
+	src := processSource{loader: &fakeProcessLoader{terminalErr: wantErr}, nodeName: "pulse-node-1"}
+
+	_, err := src.Read()
 	if !errors.Is(err, wantErr) {
-		t.Fatalf("startProcessDiscovery() error = %v, want %v", err, wantErr)
+		t.Fatalf("Read() error = %v, want %v", err, wantErr)
 	}
 }
 
-func TestStartProcessDiscovery_AttachFails(t *testing.T) {
-	app, _ := testApp()
-	wantErr := errors.New("attach failed")
-	fake := &fakeProcessLoader{attachErr: wantErr}
-
-	err := app.startProcessDiscovery(context.Background(), fake)
-	if !errors.Is(err, wantErr) {
-		t.Fatalf("startProcessDiscovery() error = %v, want %v", err, wantErr)
-	}
-}
-
-func TestStartProcessDiscovery_SuccessLogsActiveAndStartsWatcher(t *testing.T) {
-	app, buf := testApp()
-	// Read blocks forever on the very first call: the spawned watcher
-	// goroutine never reaches a log call, so it can never race with
-	// this test's buf.String() below.
-	fake := &fakeProcessLoader{block: make(chan struct{})}
-
-	if err := app.startProcessDiscovery(context.Background(), fake); err != nil {
-		t.Fatalf("startProcessDiscovery() returned error: %v", err)
-	}
-
-	if !strings.Contains(buf.String(), "process discovery active") {
-		t.Errorf("log output missing startup confirmation: %s", buf.String())
-	}
-}
-
-func TestWatchProcessEvents_LogsEachEvent(t *testing.T) {
+func TestProcessPipeline_LogsEventsEndToEnd(t *testing.T) {
 	app, buf := testApp()
 	fake := &fakeProcessLoader{
 		events: []process.ProcessEvent{
 			{PID: 100, PPID: 1, Comm: "sh", Type: process.EventStart},
 		},
-		terminalErr: errors.New("simulated read failure"),
+		block: make(chan struct{}), // keep the pipeline alive without racing buf after the one event
 	}
 
-	// Called synchronously (no `go`), so there is nothing to
-	// synchronize on: watchProcessEvents only returns after it has
-	// finished writing everything it's going to write.
-	app.watchProcessEvents(context.Background(), fake)
-
-	out := buf.String()
-	if !strings.Contains(out, `"pid":100`) {
-		t.Errorf("log output missing the observed event's pid: %s", out)
-	}
-	if !strings.Contains(out, "process.start") {
-		t.Errorf("log output missing the event type: %s", out)
-	}
-}
-
-func TestWatchProcessEvents_UnexpectedReadFailureIsWarned(t *testing.T) {
-	app, buf := testApp()
-	fake := &fakeProcessLoader{terminalErr: errors.New("boom")}
-
-	app.watchProcessEvents(context.Background(), fake)
-
-	if !strings.Contains(buf.String(), "process discovery read failed") {
-		t.Errorf("log output missing the read-failure warning: %s", buf.String())
-	}
-}
-
-func TestWatchProcessEvents_ShutdownReadFailureIsSilent(t *testing.T) {
-	app, buf := testApp()
-	fake := &fakeProcessLoader{terminalErr: errors.New("reader closed")}
+	p := app.newProcessPipeline(fake)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // simulate Run's shutdown path: ctx is already done when Read fails
+	defer cancel()
 
-	app.watchProcessEvents(ctx, fake)
+	done := make(chan struct{})
+	go func() {
+		p.Run(ctx)
+		close(done)
+	}()
 
-	if strings.Contains(buf.String(), "read failed") {
-		t.Errorf("expected no warning for a shutdown-triggered read failure, got: %s", buf.String())
+	deadline := time.After(2 * time.Second)
+	for !strings.Contains(buf.String(), `"pid":100`) {
+		select {
+		case <-deadline:
+			t.Fatalf("log output never contained the observed event's pid: %s", buf.String())
+		case <-time.After(time.Millisecond):
+		}
+	}
+
+	if !strings.Contains(buf.String(), "process.start") {
+		t.Errorf("log output missing the event type: %s", buf.String())
+	}
+
+	// Mirrors App.Run's real shutdown sequence: cancel ctx, then close
+	// the loader so its blocked Read unblocks — ctx cancellation alone
+	// does not interrupt a Read call already in progress, matching the
+	// real Loader's contract (see internal/ebpf's Loader.Close).
+	cancel()
+	fake.Close()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("pipeline did not shut down after the loader was closed")
 	}
 }
