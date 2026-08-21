@@ -45,7 +45,7 @@ func (s socketSource) Read() (model.Event, error) {
 func (a *App) newSocketPipeline(loader socketLoader) *pipeline.Pipeline {
 	return pipeline.New(
 		pipeline.Config{Name: "socket data telemetry", Workers: 2, QueueSize: 256},
-		socketSource{loader: loader, nodeName: a.cfg.NodeName},
+		containerEnrichingSource{inner: socketSource{loader: loader, nodeName: a.cfg.NodeName}},
 		a.logger,
 		&pipeline.LoggingProcessor{Logger: a.logger},
 	)

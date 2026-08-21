@@ -65,11 +65,14 @@ hasn't been built:
 
 | Field(s)                              | Deferred to                                    | Why                                                                 |
 |----------------------------------------|-------------------------------------------------|----------------------------------------------------------------------|
-| `container_id`, `namespace`, `pod`, `service` | Day 08 — Service Identity            | Day 08's own stated deliverable is designing this identity model; adding it now would preempt that design. |
+| `namespace`, `pod` (friendly name), `service` | Day 19 — Kubernetes Support           | Resolvable only via the Kubernetes API (cgroup membership alone reveals a pod's UID, not its name or namespace — see `Container`'s doc comment); Day 19 is where a Kubernetes client is introduced. |
 
 `bytes` (sent/received) was in this table through Day 05; it's now
 `Network.BytesSent`/`BytesReceived`, added Day 06 as that day's own new
-capability — see `docs/design/socket-data.md`.
+capability — see `docs/design/socket-data.md`. `container_id` was in
+this table through Day 07; it's now `Process.Container.ID` (plus
+`PodUID`, the one Kubernetes-adjacent fact resolvable without the API),
+added Day 08 — see `docs/design/service-identity.md`.
 | `latency`, `status`                    | Day 09 — HTTP Visibility               | Meaningful once there's a protocol (HTTP) they describe.            |
 | `trace_id`, `span_id`                  | Day 11 — Distributed Trace Model      | Day 11's stated deliverable; correlating events into traces is a distinct concern from describing one event. |
 

@@ -74,6 +74,38 @@ func TestLoggingProcessor_LogsProcessAndNetworkFields(t *testing.T) {
 	}
 }
 
+func TestLoggingProcessor_LogsContainerFields(t *testing.T) {
+	var buf bytes.Buffer
+	p := &pipeline.LoggingProcessor{Logger: slog.New(slog.NewJSONHandler(&buf, nil))}
+
+	event := model.Event{
+		ID:        "abc-123",
+		Type:      "process.start",
+		Timestamp: time.Now(),
+		Host:      "pulse-node-1",
+		Process: &model.Process{
+			PID:     4242,
+			Command: "nginx",
+			Container: &model.Container{
+				ID:     "e3f1c2a9b8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1",
+				PodUID: "12345678-90ab-cdef-1234-567890abcdef",
+			},
+		},
+	}
+
+	if err := p.Process(context.Background(), event); err != nil {
+		t.Fatalf("Process() returned error: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, `"container_id":"e3f1c2a9b8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1"`) {
+		t.Errorf("log output missing container_id: %s", out)
+	}
+	if !strings.Contains(out, `"pod_uid":"12345678-90ab-cdef-1234-567890abcdef"`) {
+		t.Errorf("log output missing pod_uid: %s", out)
+	}
+}
+
 func TestLoggingProcessor_OmitsUnsetSubStructures(t *testing.T) {
 	var buf bytes.Buffer
 	p := &pipeline.LoggingProcessor{Logger: slog.New(slog.NewJSONHandler(&buf, nil))}

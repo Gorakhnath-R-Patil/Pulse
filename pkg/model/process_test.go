@@ -31,3 +31,20 @@ func TestProcess_Validate(t *testing.T) {
 		})
 	}
 }
+
+func TestProcess_Validate_PropagatesContainerError(t *testing.T) {
+	p := model.Process{PID: 1234, Container: &model.Container{}} // missing required ID
+
+	err := p.Validate()
+	if !errors.Is(err, model.ErrMissingField) {
+		t.Fatalf("Validate() error = %v, want it to wrap the nested Container validation error (ErrMissingField)", err)
+	}
+}
+
+func TestProcess_Validate_NilContainerIsValid(t *testing.T) {
+	p := model.Process{PID: 1234}
+
+	if err := p.Validate(); err != nil {
+		t.Fatalf("Validate() with no Container set returned error: %v", err)
+	}
+}

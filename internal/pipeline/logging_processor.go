@@ -29,6 +29,12 @@ func (p *LoggingProcessor) Process(_ context.Context, event model.Event) error {
 		if event.Process.Executable != "" {
 			attrs = append(attrs, "executable", event.Process.Executable)
 		}
+		if event.Process.Container != nil {
+			attrs = append(attrs, "container_id", event.Process.Container.ID)
+			if event.Process.Container.PodUID != "" {
+				attrs = append(attrs, "pod_uid", event.Process.Container.PodUID)
+			}
+		}
 	}
 
 	if event.Network != nil {

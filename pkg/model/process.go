@@ -3,11 +3,10 @@ package model
 import "fmt"
 
 // Process identifies the process associated with an observed activity.
-// It is deliberately narrow today: just enough to say "which process."
-// Container, pod, namespace, and service identity are a distinct
-// enrichment concern with their own lifecycle and data sources, and are
-// introduced by the Day 8 service identity model rather than bolted onto
-// Process here — see docs/design/event-model.md.
+// Service identity (namespace, pod name, service name — the parts of
+// Day 6's original deferred field group that need the Kubernetes API,
+// not just cgroup membership) is not here yet; see Container's doc
+// comment and docs/design/service-identity.md.
 type Process struct {
 	// PID is the process ID as seen by the kernel that observed it.
 	PID int32 `json:"pid"`
@@ -19,6 +18,9 @@ type Process struct {
 	// Command is the process's reported name (e.g. from /proc/<pid>/comm),
 	// which may differ from Executable's basename.
 	Command string `json:"command,omitempty"`
+
+	// Container identifies the container this process runs in, if any.
+	Container *Container `json:"container,omitempty"`
 }
 
 // Validate reports whether p is a well-formed Process reference. A nil
@@ -27,6 +29,11 @@ type Process struct {
 func (p Process) Validate() error {
 	if p.PID <= 0 {
 		return fmt.Errorf("%w: process.pid must be positive, got %d", ErrInvalidField, p.PID)
+	}
+	if p.Container != nil {
+		if err := p.Container.Validate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

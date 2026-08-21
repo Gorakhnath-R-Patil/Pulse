@@ -105,6 +105,11 @@ behind specific technical choices as they're made, day by day.
   than dropping events when the queue is full) and graceful shutdown
   that drains in-flight work before exiting. See
   [docs/design/event-pipeline.md](docs/design/event-pipeline.md).
+- Service identity ([`internal/discovery`](internal/discovery)): every
+  event carrying a process is enriched with which container (and, on
+  Kubernetes, which pod UID) it belongs to — resolved from `/proc/<pid>/cgroup`
+  alone, no container runtime or Kubernetes API access needed. See
+  [docs/design/service-identity.md](docs/design/service-identity.md).
 
 This is real, kernel-observed telemetry, not a placeholder — run
 `pulse-agent` on Linux and it logs every process that starts or exits,

@@ -47,7 +47,7 @@ func (s processSource) Read() (model.Event, error) {
 func (a *App) newProcessPipeline(loader processLoader) *pipeline.Pipeline {
 	return pipeline.New(
 		pipeline.Config{Name: "process discovery", Workers: 2, QueueSize: 256},
-		processSource{loader: loader, nodeName: a.cfg.NodeName},
+		containerEnrichingSource{inner: processSource{loader: loader, nodeName: a.cfg.NodeName}},
 		a.logger,
 		&pipeline.LoggingProcessor{Logger: a.logger},
 	)

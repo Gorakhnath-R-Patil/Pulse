@@ -37,7 +37,7 @@ func (s networkSource) Read() (model.Event, error) {
 func (a *App) newNetworkPipeline(loader networkLoader) *pipeline.Pipeline {
 	return pipeline.New(
 		pipeline.Config{Name: "network connection telemetry", Workers: 2, QueueSize: 256},
-		networkSource{loader: loader, nodeName: a.cfg.NodeName},
+		containerEnrichingSource{inner: networkSource{loader: loader, nodeName: a.cfg.NodeName}},
 		a.logger,
 		&pipeline.LoggingProcessor{Logger: a.logger},
 	)
