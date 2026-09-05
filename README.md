@@ -118,13 +118,20 @@ behind specific technical choices as they're made, day by day.
   HTTPS is invisible to this technique entirely — see
   [docs/design/http-visibility.md](docs/design/http-visibility.md) for
   exactly what's observed, inferred, and unavailable.
+- DNS telemetry ([`internal/dns`](internal/dns)): real DNS queries and
+  responses over UDP, captured via
+  [`bpf/programs/dns_telemetry.c`](bpf/programs/dns_telemetry.c), with
+  real query→response latency computed from each message's own
+  transaction ID — no export-day correlation needed for this one,
+  unlike HTTP's. See
+  [docs/design/dns-telemetry.md](docs/design/dns-telemetry.md).
 
 This is real, kernel-observed telemetry, not a placeholder — run
 `pulse-agent` on Linux and it logs every process that starts or exits,
 every outbound TCP connection attempt, every connection's byte counts at
-close, and every cleartext HTTP request/response line, on the host.
-What's not here yet: DNS telemetry, distributed tracing, export, and
-storage — all later in the roadmap.
+close, every cleartext HTTP request/response line, and every DNS
+query/response with real latency, on the host. What's not here yet:
+distributed tracing, export, and storage — all later in the roadmap.
 
 ## Getting started
 
