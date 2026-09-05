@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"github.com/Gorakhnath-R-Patil/Pulse/internal/correlation"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/pipeline"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/process"
 	"github.com/Gorakhnath-R-Patil/Pulse/pkg/model"
@@ -44,11 +45,14 @@ func (s processSource) Read() (model.Event, error) {
 // newProcessPipeline builds the process discovery pipeline. The caller
 // is responsible for loader.Load()/Attach() before starting it (Run)
 // and loader.Close() during shutdown — see capability/Run in agent.go.
-func (a *App) newProcessPipeline(loader processLoader) *pipeline.Pipeline {
+// corr is shared across every capability's pipeline so their events
+// correlate into the same traces — see docs/design/trace-correlation.md.
+func (a *App) newProcessPipeline(loader processLoader, corr *correlation.Correlator) *pipeline.Pipeline {
 	return pipeline.New(
 		pipeline.Config{Name: "process discovery", Workers: 2, QueueSize: 256},
 		containerEnrichingSource{inner: processSource{loader: loader, nodeName: a.cfg.NodeName}},
 		a.logger,
 		&pipeline.LoggingProcessor{Logger: a.logger},
+		&correlation.CorrelatingProcessor{Correlator: corr, Logger: a.logger},
 	)
 }

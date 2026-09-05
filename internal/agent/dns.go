@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"github.com/Gorakhnath-R-Patil/Pulse/internal/correlation"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/dns"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/pipeline"
 	"github.com/Gorakhnath-R-Patil/Pulse/pkg/model"
@@ -32,11 +33,12 @@ func (s dnsSource) Read() (model.Event, error) {
 
 // newDNSPipeline builds the DNS telemetry pipeline. See
 // newProcessPipeline's doc comment for the Load/Attach/Close contract.
-func (a *App) newDNSPipeline(loader dnsLoader) *pipeline.Pipeline {
+func (a *App) newDNSPipeline(loader dnsLoader, corr *correlation.Correlator) *pipeline.Pipeline {
 	return pipeline.New(
 		pipeline.Config{Name: "dns telemetry", Workers: 2, QueueSize: 256},
 		containerEnrichingSource{inner: dnsSource{loader: loader, nodeName: a.cfg.NodeName}},
 		a.logger,
 		&pipeline.LoggingProcessor{Logger: a.logger},
+		&correlation.CorrelatingProcessor{Correlator: corr, Logger: a.logger},
 	)
 }

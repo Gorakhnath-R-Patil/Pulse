@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/config"
+	"github.com/Gorakhnath-R-Patil/Pulse/internal/correlation"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/process"
 )
 
@@ -152,7 +153,7 @@ func TestProcessPipeline_LogsEventsEndToEnd(t *testing.T) {
 		block: make(chan struct{}), // keep the pipeline alive without racing buf after the one event
 	}
 
-	p := app.newProcessPipeline(fake)
+	p := app.newProcessPipeline(fake, correlation.New(time.Minute))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

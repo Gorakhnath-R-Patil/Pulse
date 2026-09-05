@@ -132,17 +132,26 @@ behind specific technical choices as they're made, day by day.
   function that organizes a set of spans into a tree — tolerating
   multiple roots and orphaned spans, since an incomplete trace is the
   normal case, not an edge case. See
-  [docs/design/trace-model.md](docs/design/trace-model.md). Turning raw
-  telemetry events into spans in the first place is next in the
-  roadmap, not yet implemented.
+  [docs/design/trace-model.md](docs/design/trace-model.md).
+- Trace correlation ([`internal/correlation`](internal/correlation)):
+  every capability's pipeline now feeds a shared correlator that groups
+  events by process and time proximity into spans. Read this for what
+  it honestly is, not more:
+  [docs/design/trace-correlation.md](docs/design/trace-correlation.md)
+  explains up front why this is *not* the cross-service
+  `API → Order → Payment → PostgreSQL` tracing a distributed system
+  eventually needs — that requires trace-context propagation, inbound-
+  connection capture, and cross-host aggregation, none of which exist
+  yet — and what it does deliver instead: one process's own sequence
+  of observed activity, correlated into a real trace.
 
 This is real, kernel-observed telemetry, not a placeholder — run
 `pulse-agent` on Linux and it logs every process that starts or exits,
 every outbound TCP connection attempt, every connection's byte counts at
 close, every cleartext HTTP request/response line, and every DNS
-query/response with real latency, on the host. What's not here yet:
-correlating that telemetry into traces, export, and storage — all later
-in the roadmap.
+query/response with real latency — each one now also correlated into a
+trace. What's not here yet: cross-service tracing, export, and storage —
+all later in the roadmap.
 
 ## Getting started
 

@@ -2,7 +2,8 @@
 // structured logging of its identity, best-effort telemetry capture
 // (process discovery, network connection telemetry, socket data
 // telemetry, HTTP visibility, DNS telemetry) run through a shared
-// internal/pipeline per capability, and graceful shutdown on context
+// internal/pipeline per capability with a shared internal/correlation
+// stage across all of them, and graceful shutdown on context
 // cancellation.
 package agent
 
@@ -10,8 +11,10 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/config"
+	"github.com/Gorakhnath-R-Patil/Pulse/internal/correlation"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/dns"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/httpvis"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/network"
@@ -20,6 +23,12 @@ import (
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/socket"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/version"
 )
+
+// correlationWindow is how much time may pass between two events from
+// the same process before internal/correlation starts a new trace
+// rather than chaining onto the previous one. See
+// docs/design/trace-correlation.md.
+const correlationWindow = 30 * time.Second
 
 // App is the pulse-agent application. Its dependencies (config, logger)
 // are passed in explicitly rather than read from globals, so it can be
@@ -72,6 +81,11 @@ func (a *App) Run(ctx context.Context) error {
 		"commit", version.Commit,
 	)
 
+	// One Correlator shared across every capability below is what lets
+	// e.g. a process's DNS query and its subsequent TCP connect end up
+	// in the same trace — see docs/design/trace-correlation.md.
+	correlator := correlation.New(correlationWindow)
+
 	processLoader := process.NewLoader()
 	networkLoader := network.NewLoader()
 	socketLoader := socket.NewLoader()
@@ -79,11 +93,11 @@ func (a *App) Run(ctx context.Context) error {
 	dnsLoader := dns.NewLoader()
 
 	candidates := []capability{
-		{"process discovery", processLoader, a.newProcessPipeline(processLoader)},
-		{"network connection telemetry", networkLoader, a.newNetworkPipeline(networkLoader)},
-		{"socket data telemetry", socketLoader, a.newSocketPipeline(socketLoader)},
-		{"http visibility", httpvisLoader, a.newHTTPVisPipeline(httpvisLoader)},
-		{"dns telemetry", dnsLoader, a.newDNSPipeline(dnsLoader)},
+		{"process discovery", processLoader, a.newProcessPipeline(processLoader, correlator)},
+		{"network connection telemetry", networkLoader, a.newNetworkPipeline(networkLoader, correlator)},
+		{"socket data telemetry", socketLoader, a.newSocketPipeline(socketLoader, correlator)},
+		{"http visibility", httpvisLoader, a.newHTTPVisPipeline(httpvisLoader, correlator)},
+		{"dns telemetry", dnsLoader, a.newDNSPipeline(dnsLoader, correlator)},
 	}
 
 	var active []capability

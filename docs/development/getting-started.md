@@ -130,6 +130,7 @@ internal/dns/        DNS telemetry: query/response capture, wire parsing, transa
 internal/pipeline/   Shared read/queue/worker-pool/backpressure pipeline used by every capability.
 internal/discovery/  Container/pod identity from cgroup membership — no runtime or Kubernetes API.
 internal/tracing/    Trace assembly: organizes model.Span values into a tree by parent linkage.
+internal/correlation/ Trace correlation: groups events into spans by process and time proximity.
 pkg/model/           Canonical telemetry Event and its sub-structures — the shared data contract.
 proto/               Wire-format contracts (.proto), checked in ahead of any code generation.
 bpf/programs/        Hand-written eBPF C source.

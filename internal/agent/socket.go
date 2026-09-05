@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"github.com/Gorakhnath-R-Patil/Pulse/internal/correlation"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/pipeline"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/socket"
 	"github.com/Gorakhnath-R-Patil/Pulse/pkg/model"
@@ -42,11 +43,12 @@ func (s socketSource) Read() (model.Event, error) {
 // pipeline.Config.QueueSize, and events aren't dropped under
 // backpressure — the reader blocks instead. See
 // docs/design/event-pipeline.md.
-func (a *App) newSocketPipeline(loader socketLoader) *pipeline.Pipeline {
+func (a *App) newSocketPipeline(loader socketLoader, corr *correlation.Correlator) *pipeline.Pipeline {
 	return pipeline.New(
 		pipeline.Config{Name: "socket data telemetry", Workers: 2, QueueSize: 256},
 		containerEnrichingSource{inner: socketSource{loader: loader, nodeName: a.cfg.NodeName}},
 		a.logger,
 		&pipeline.LoggingProcessor{Logger: a.logger},
+		&correlation.CorrelatingProcessor{Correlator: corr, Logger: a.logger},
 	)
 }
