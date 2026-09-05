@@ -1,8 +1,8 @@
 // Package agent contains the pulse-agent application: startup,
 // structured logging of its identity, best-effort telemetry capture
 // (process discovery, network connection telemetry, socket data
-// telemetry) run through a shared internal/pipeline per capability, and
-// graceful shutdown on context cancellation.
+// telemetry, HTTP visibility) run through a shared internal/pipeline
+// per capability, and graceful shutdown on context cancellation.
 package agent
 
 import (
@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/config"
+	"github.com/Gorakhnath-R-Patil/Pulse/internal/httpvis"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/network"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/pipeline"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/process"
@@ -32,8 +33,9 @@ func New(cfg config.AgentConfig, logger *slog.Logger) *App {
 }
 
 // capabilityLoader is the lifecycle every telemetry capability's loader
-// shares — process.Loader, network.Loader, and socket.Loader all
-// satisfy this structurally, without declaring it themselves.
+// shares — process.Loader, network.Loader, socket.Loader, and
+// httpvis.Loader all satisfy this structurally, without declaring it
+// themselves.
 type capabilityLoader interface {
 	Load() error
 	Attach() error
@@ -71,11 +73,13 @@ func (a *App) Run(ctx context.Context) error {
 	processLoader := process.NewLoader()
 	networkLoader := network.NewLoader()
 	socketLoader := socket.NewLoader()
+	httpvisLoader := httpvis.NewLoader()
 
 	candidates := []capability{
 		{"process discovery", processLoader, a.newProcessPipeline(processLoader)},
 		{"network connection telemetry", networkLoader, a.newNetworkPipeline(networkLoader)},
 		{"socket data telemetry", socketLoader, a.newSocketPipeline(socketLoader)},
+		{"http visibility", httpvisLoader, a.newHTTPVisPipeline(httpvisLoader)},
 	}
 
 	var active []capability

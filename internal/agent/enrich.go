@@ -9,7 +9,8 @@ import (
 // containerEnrichingSource wraps another pipeline.EventSource, adding
 // container identity (internal/discovery) to every event that has a
 // Process — regardless of which capability produced it, since process
-// discovery, network, and socket events all carry one. This is a
+// discovery, network, socket, and HTTP visibility events all carry one.
+// This is a
 // decorator over EventSource rather than logic duplicated into each of
 // process.go/network.go/socket.go's own source adapters, and rather
 // than a pipeline.EventProcessor: EventProcessor receives events by

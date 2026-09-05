@@ -110,13 +110,21 @@ behind specific technical choices as they're made, day by day.
   Kubernetes, which pod UID) it belongs to — resolved from `/proc/<pid>/cgroup`
   alone, no container runtime or Kubernetes API access needed. See
   [docs/design/service-identity.md](docs/design/service-identity.md).
+- HTTP visibility ([`internal/httpvis`](internal/httpvis)): real
+  cleartext HTTP request/response lines — method, path, status —
+  captured by inspecting `write()` syscalls in-kernel via
+  [`bpf/programs/http_visibility.c`](bpf/programs/http_visibility.c),
+  parsed in userspace, with the raw bytes discarded immediately after.
+  HTTPS is invisible to this technique entirely — see
+  [docs/design/http-visibility.md](docs/design/http-visibility.md) for
+  exactly what's observed, inferred, and unavailable.
 
 This is real, kernel-observed telemetry, not a placeholder — run
 `pulse-agent` on Linux and it logs every process that starts or exits,
-every outbound TCP connection attempt, and every connection's byte
-counts at close, on the host. What's not here yet: container/service
-identity, distributed tracing, export, and storage — all later
-in the roadmap.
+every outbound TCP connection attempt, every connection's byte counts at
+close, and every cleartext HTTP request/response line, on the host.
+What's not here yet: DNS telemetry, distributed tracing, export, and
+storage — all later in the roadmap.
 
 ## Getting started
 

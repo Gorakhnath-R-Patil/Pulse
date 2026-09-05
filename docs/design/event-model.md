@@ -66,18 +66,24 @@ hasn't been built:
 | Field(s)                              | Deferred to                                    | Why                                                                 |
 |----------------------------------------|-------------------------------------------------|----------------------------------------------------------------------|
 | `namespace`, `pod` (friendly name), `service` | Day 19 — Kubernetes Support           | Resolvable only via the Kubernetes API (cgroup membership alone reveals a pod's UID, not its name or namespace — see `Container`'s doc comment); Day 19 is where a Kubernetes client is introduced. |
-
-`bytes` (sent/received) was in this table through Day 05; it's now
-`Network.BytesSent`/`BytesReceived`, added Day 06 as that day's own new
-capability — see `docs/design/socket-data.md`. `container_id` was in
-this table through Day 07; it's now `Process.Container.ID` (plus
-`PodUID`, the one Kubernetes-adjacent fact resolvable without the API),
-added Day 08 — see `docs/design/service-identity.md`.
-| `latency`, `status`                    | Day 09 — HTTP Visibility               | Meaningful once there's a protocol (HTTP) they describe.            |
+| `latency`                              | Day 12 — Trace Correlation             | Needs pairing a request write with its later response write, possibly across a different call entirely — that pairing is Day 12's stated deliverable, not Day 09's. |
 | `trace_id`, `span_id`                  | Day 11 — Distributed Trace Model      | Day 11's stated deliverable; correlating events into traces is a distinct concern from describing one event. |
 
 Each will be added as an additive, non-breaking field (or, for HTTP/DNS
-specifics, likely via `Attributes` — see above) when its day arrives.
+specifics, via `Attributes` — see above) when its day arrives. Several
+fields that were in this table in earlier revisions have already been
+resolved, each as its own day's new capability rather than a change to
+this document's plan:
+
+- `bytes` (sent/received) → `Network.BytesSent`/`BytesReceived`,
+  Day 06 — see `docs/design/socket-data.md`.
+- `container_id` → `Process.Container.ID` (plus `PodUID`, the one
+  Kubernetes-adjacent fact resolvable without the API), Day 08 — see
+  `docs/design/service-identity.md`.
+- `status` (and `method`, `path`, not in the original field list but
+  needed for the same reason) → `Attributes["http.status"]` /
+  `["http.method"]` / `["http.path"]`, Day 09 — see
+  `docs/design/http-visibility.md`.
 
 ## Tradeoffs
 

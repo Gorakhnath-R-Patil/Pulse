@@ -276,3 +276,59 @@ packages without `clang` installed, and CI takes slightly longer
 kernel-level Go project — see `docs/development/getting-started.md`'s
 Linux/eBPF prerequisites — and are already true of `bpf2go`-based
 projects generally, not a cost specific to this decision.
+
+---
+
+## ADR-008: HTTP visibility uses a tracepoint, not fentry/fexit
+
+**Decision:** `bpf/programs/http_visibility.c` hooks
+`sys_enter_write` — a tracepoint, the same mechanism as
+`foundation.c` and `process.c` — rather than an `fentry`/`fexit`
+program on `tcp_sendmsg` or `vfs_write`, even though Day 05/06
+(`tcp_connect.c`, `tcp_close.c`) both used `fentry`/`fexit` for their
+own kernel hooks.
+
+**Context:** Every eBPF program added from Day 05 onward
+(`tcp_connect.c`, `tcp_close.c`) uses `fentry`/`fexit`, and CI's
+privileged loader-test step has failed, cause undiagnosed, since Day 05
+— the failure has persisted through Day 08 without a code change to
+either program, and this project still doesn't have log access to CI to
+determine why (see the Day 05 daily log). What's known: every
+tracepoint-based program (`foundation.c`, `process.c`) passed privileged
+CI the first time it was introduced; every `fentry`/`fexit`-based
+program has coincided with the still-open failure. That's a correlation
+across two data points, not a diagnosis — the actual cause could just as
+easily be in a shared test helper, a CI environment quirk, or something
+else entirely unrelated to the attach mechanism.
+
+**Options:**
+- Use `fentry`/`fexit` on `tcp_sendmsg`/`vfs_write` for symmetry with
+  Day 05/06, accepting the buffer/`msghdr`/`iov_iter` CO-RE navigation
+  that would require and stacking a third unverified mechanism on top of
+  an already-unexplained failure.
+- Use `sys_enter_write`, gaining direct access to the syscall's own
+  `buf`/`count` arguments (no `msghdr` to navigate at all) and matching
+  the one attach mechanism with a confirmed, passing track record.
+
+**Choice:** `sys_enter_write`.
+
+**Reason:** Given a real, currently-unexplained failure already
+entangled with this project's only two `fentry`/`fexit` programs, adding
+a *third* without understanding the first two would make isolating the
+actual cause strictly harder whenever CI log access finally arrives —
+one more variable in an already-ambiguous picture. `sys_enter_write`
+also happens to be the technically simpler choice on its own merits
+(direct syscall arguments vs. kernel-internal buffer structures), so
+this wasn't a pure risk-aversion trade against a better alternative.
+
+**Tradeoffs:** `sys_enter_write` only observes `write()` calls
+specifically — a process using `writev`, `send`, or `sendto` to emit an
+HTTP request/response goes unobserved (a real, documented limitation;
+see `docs/design/http-visibility.md`). This is accepted for now; revisit
+by adding sibling tracepoints (`sys_enter_sendto`, etc.) once there's
+reason to believe the gap matters in practice, not preemptively. This
+decision should also be revisited outright once the Day 05 CI mystery is
+actually diagnosed — if it turns out to have nothing to do with
+`fentry`/`fexit`, that removes the reason for this ADR's caution, though
+not necessarily the technical case for `sys_enter_write` on its own
+merits.
