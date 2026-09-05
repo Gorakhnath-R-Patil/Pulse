@@ -125,13 +125,24 @@ behind specific technical choices as they're made, day by day.
   transaction ID — no export-day correlation needed for this one,
   unlike HTTP's. See
   [docs/design/dns-telemetry.md](docs/design/dns-telemetry.md).
+- A distributed trace data model
+  ([`pkg/model.Span`](pkg/model/trace.go)) and assembly logic
+  ([`internal/tracing`](internal/tracing)): trace/span identity in the
+  W3C Trace Context / OTLP ID format, parent-child linkage, and a
+  function that organizes a set of spans into a tree — tolerating
+  multiple roots and orphaned spans, since an incomplete trace is the
+  normal case, not an edge case. See
+  [docs/design/trace-model.md](docs/design/trace-model.md). Turning raw
+  telemetry events into spans in the first place is next in the
+  roadmap, not yet implemented.
 
 This is real, kernel-observed telemetry, not a placeholder — run
 `pulse-agent` on Linux and it logs every process that starts or exits,
 every outbound TCP connection attempt, every connection's byte counts at
 close, every cleartext HTTP request/response line, and every DNS
 query/response with real latency, on the host. What's not here yet:
-distributed tracing, export, and storage — all later in the roadmap.
+correlating that telemetry into traces, export, and storage — all later
+in the roadmap.
 
 ## Getting started
 

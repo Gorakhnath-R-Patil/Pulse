@@ -66,8 +66,7 @@ hasn't been built:
 | Field(s)                              | Deferred to                                    | Why                                                                 |
 |----------------------------------------|-------------------------------------------------|----------------------------------------------------------------------|
 | `namespace`, `pod` (friendly name), `service` | Day 19 — Kubernetes Support           | Resolvable only via the Kubernetes API (cgroup membership alone reveals a pod's UID, not its name or namespace — see `Container`'s doc comment); Day 19 is where a Kubernetes client is introduced. |
-| `latency`                              | Day 12 — Trace Correlation             | Needs pairing a request write with its later response write, possibly across a different call entirely — that pairing is Day 12's stated deliverable, not Day 09's. |
-| `trace_id`, `span_id`                  | Day 11 — Distributed Trace Model      | Day 11's stated deliverable; correlating events into traces is a distinct concern from describing one event. |
+| HTTP request/response `latency`        | Day 12 — Trace Correlation             | Needs pairing a request write with its later response write, possibly across a different call entirely — that pairing is Day 12's stated deliverable, not Day 09's. DNS's own latency needed no such deferral — see the resolved list below. |
 
 Each will be added as an additive, non-breaking field (or, for HTTP/DNS
 specifics, via `Attributes` — see above) when its day arrives. Several
@@ -84,6 +83,14 @@ this document's plan:
   needed for the same reason) → `Attributes["http.status"]` /
   `["http.method"]` / `["http.path"]`, Day 09 — see
   `docs/design/http-visibility.md`.
+- DNS `query`/`response`/`latency` → `Attributes["dns.name"]` /
+  `["dns.response_code"]` / `["dns.latency_ms"]`, Day 10 — see
+  `docs/design/dns-telemetry.md`.
+- `trace_id`, `span_id` → not fields on `Event` at all, but
+  `pkg/model.Span`'s own `TraceID`/`SpanID`, Day 11 — see
+  `docs/design/trace-model.md` for why a trace's identity lives on a
+  new `Span` type rather than bolted onto `Event`, and for what's still
+  deferred from there to Day 12.
 
 ## Tradeoffs
 

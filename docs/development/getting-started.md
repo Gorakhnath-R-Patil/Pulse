@@ -129,6 +129,7 @@ internal/httpvis/    HTTP visibility: cleartext request/response line capture vi
 internal/dns/        DNS telemetry: query/response capture, wire parsing, transaction-ID latency correlation.
 internal/pipeline/   Shared read/queue/worker-pool/backpressure pipeline used by every capability.
 internal/discovery/  Container/pod identity from cgroup membership — no runtime or Kubernetes API.
+internal/tracing/    Trace assembly: organizes model.Span values into a tree by parent linkage.
 pkg/model/           Canonical telemetry Event and its sub-structures — the shared data contract.
 proto/               Wire-format contracts (.proto), checked in ahead of any code generation.
 bpf/programs/        Hand-written eBPF C source.
