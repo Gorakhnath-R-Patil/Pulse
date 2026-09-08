@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Gorakhnath-R-Patil/Pulse/internal/correlation"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/network"
 )
 
@@ -90,7 +89,7 @@ func TestNetworkPipeline_LogsEventsEndToEnd(t *testing.T) {
 		block: make(chan struct{}),
 	}
 
-	p := app.newNetworkPipeline(fake, correlation.New(time.Minute))
+	p := app.newNetworkPipeline(fake, testCorrelatingProcessor())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -109,3 +109,25 @@ func TestLoadAgentConfig_EnvOverridesFile(t *testing.T) {
 		t.Errorf("Logging.Format = %q, want env override %q", cfg.Logging.Format, "text")
 	}
 }
+
+func TestLoadAgentConfig_OTLPEndpointDefaultsEmpty(t *testing.T) {
+	cfg, err := config.LoadAgentConfig("")
+	if err != nil {
+		t.Fatalf("LoadAgentConfig(\"\") returned error: %v", err)
+	}
+	if cfg.OTLPEndpoint != "" {
+		t.Errorf("OTLPEndpoint = %q, want empty by default (export disabled)", cfg.OTLPEndpoint)
+	}
+}
+
+func TestLoadAgentConfig_OTLPEndpointEnvOverride(t *testing.T) {
+	t.Setenv("PULSE_OTLP_ENDPOINT", "localhost:4317")
+
+	cfg, err := config.LoadAgentConfig("")
+	if err != nil {
+		t.Fatalf("LoadAgentConfig(\"\") returned error: %v", err)
+	}
+	if cfg.OTLPEndpoint != "localhost:4317" {
+		t.Errorf("OTLPEndpoint = %q, want env override %q", cfg.OTLPEndpoint, "localhost:4317")
+	}
+}

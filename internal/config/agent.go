@@ -6,9 +6,7 @@ import (
 )
 
 // AgentConfig is the top-level configuration for pulse-agent, the
-// per-host process that will eventually own eBPF-based observation
-// (introduced starting Day 03). Day 01 only defines the identity and
-// logging fields the agent needs to start up and log meaningfully.
+// per-host process that owns eBPF-based observation.
 type AgentConfig struct {
 	// NodeName identifies the host this agent runs on. It is attached to
 	// every event the agent produces once event capture exists, so
@@ -16,6 +14,12 @@ type AgentConfig struct {
 	NodeName string `yaml:"node_name"`
 
 	Logging LoggingConfig `yaml:"logging"`
+
+	// OTLPEndpoint is an OTLP/gRPC collector address (e.g.
+	// "localhost:4317") to export correlated spans to. Empty (the
+	// default) disables export entirely — pulse-agent never tries to
+	// reach a made-up default endpoint. See docs/design/otlp-export.md.
+	OTLPEndpoint string `yaml:"otlp_endpoint,omitempty"`
 }
 
 // DefaultAgentConfig returns the configuration used when no file is
@@ -63,6 +67,7 @@ func LoadAgentConfig(path string) (AgentConfig, error) {
 	}
 
 	applyLoggingEnvOverrides(&cfg.Logging)
+	applyAgentEnvOverrides(&cfg)
 
 	if err := cfg.Validate(); err != nil {
 		return AgentConfig{}, err

@@ -65,3 +65,41 @@ func TestCorrelatingProcessor_ChainsAcrossCalls(t *testing.T) {
 		t.Errorf("log output missing the expected parent_span_id (%s): %s", firstSpan.SpanID, out)
 	}
 }
+
+type fakeExporter struct {
+	spans []model.Span
+}
+
+func (f *fakeExporter) Enqueue(span model.Span) {
+	f.spans = append(f.spans, span)
+}
+
+func TestCorrelatingProcessor_ForwardsToExporterWhenSet(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+	exporter := &fakeExporter{}
+	p := &correlation.CorrelatingProcessor{Correlator: correlation.New(30 * time.Second), Logger: logger, Exporter: exporter}
+
+	event := model.Event{Type: "network.connect", Timestamp: time.Now(), Process: &model.Process{PID: 100, Command: "curl"}}
+	if err := p.Process(context.Background(), event); err != nil {
+		t.Fatalf("Process() returned error: %v", err)
+	}
+
+	if len(exporter.spans) != 1 {
+		t.Fatalf("len(exporter.spans) = %d, want 1", len(exporter.spans))
+	}
+	if exporter.spans[0].Name != "network.connect" {
+		t.Errorf("exported span Name = %q, want %q", exporter.spans[0].Name, "network.connect")
+	}
+}
+
+func TestCorrelatingProcessor_NilExporterIsSkippedSafely(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, nil))
+	p := &correlation.CorrelatingProcessor{Correlator: correlation.New(30 * time.Second), Logger: logger} // Exporter left nil
+
+	event := model.Event{Type: "network.connect", Timestamp: time.Now(), Process: &model.Process{PID: 100, Command: "curl"}}
+	if err := p.Process(context.Background(), event); err != nil {
+		t.Fatalf("Process() with a nil Exporter returned error: %v", err)
+	}
+}

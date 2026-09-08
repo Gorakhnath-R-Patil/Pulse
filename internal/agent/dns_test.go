@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Gorakhnath-R-Patil/Pulse/internal/correlation"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/dns"
 )
 
@@ -87,7 +86,7 @@ func TestDNSPipeline_LogsEventsEndToEnd(t *testing.T) {
 		block: make(chan struct{}),
 	}
 
-	p := app.newDNSPipeline(fake, correlation.New(time.Minute))
+	p := app.newDNSPipeline(fake, testCorrelatingProcessor())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

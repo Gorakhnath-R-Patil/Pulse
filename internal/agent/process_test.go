@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"strings"
 	"sync"
@@ -93,6 +94,21 @@ func testApp() (*App, *syncBuffer) {
 	return New(config.AgentConfig{NodeName: "pulse-node-1"}, logger), buf
 }
 
+// testCorrelatingProcessor returns a *correlation.CorrelatingProcessor
+// suitable for the *PipelineLogsEventsEndToEnd tests across this
+// package (process_test.go, network_test.go, socket_test.go,
+// httpvis_test.go, dns_test.go): every newXPipeline constructor needs
+// one now that pipelines share a single CorrelatingProcessor rather
+// than each building their own (see agent.go's Run) — its own log
+// output isn't what those tests assert on, so it discards it, and no
+// Exporter is set (matching the default, export-disabled behavior).
+func testCorrelatingProcessor() *correlation.CorrelatingProcessor {
+	return &correlation.CorrelatingProcessor{
+		Correlator: correlation.New(time.Minute),
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+}
+
 func TestProcessSource_Read_NormalizesEvent(t *testing.T) {
 	fake := &fakeProcessLoader{events: []process.ProcessEvent{
 		{PID: 100, PPID: 1, Comm: "sh", Type: process.EventStart},
@@ -153,7 +169,7 @@ func TestProcessPipeline_LogsEventsEndToEnd(t *testing.T) {
 		block: make(chan struct{}), // keep the pipeline alive without racing buf after the one event
 	}
 
-	p := app.newProcessPipeline(fake, correlation.New(time.Minute))
+	p := app.newProcessPipeline(fake, testCorrelatingProcessor())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

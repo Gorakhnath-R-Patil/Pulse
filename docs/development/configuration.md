@@ -15,11 +15,11 @@ previous:
    the file doesn't exist, this is a startup error (`ErrNotFound`) rather
    than a silent fallback to defaults — an operator who names a file
    expects it to be read.
-3. **Environment variables** — currently `PULSE_LOG_LEVEL` and
-   `PULSE_LOG_FORMAT`, which override the `logging.level` /
-   `logging.format` fields regardless of source. This matches the common
-   container pattern of overriding a mounted config file at deploy time
-   without editing it.
+3. **Environment variables** — `PULSE_LOG_LEVEL` and `PULSE_LOG_FORMAT`
+   override `logging.level`/`logging.format` for both binaries;
+   `PULSE_OTLP_ENDPOINT` (`pulse-agent` only) overrides `otlp_endpoint`.
+   This matches the common container pattern of overriding a mounted
+   config file at deploy time without editing it.
 4. **Validation** — the fully-resolved config is validated before the
    loader returns it. Any failure here is also a startup error
    (`ErrInvalidValue`), never a silent correction.
@@ -35,6 +35,7 @@ ignored key.
 | `node_name`       | string | OS hostname          | Identifies this host in emitted telemetry (used starting Day 04+). |
 | `logging.level`   | string | `info`               | One of `debug`, `info`, `warn`, `error`.                            |
 | `logging.format`  | string | `json`               | One of `json`, `text`.                                              |
+| `otlp_endpoint`   | string | (empty, export disabled) | OTLP/gRPC collector address, e.g. `localhost:4317`. See `docs/design/otlp-export.md`. |
 
 ## `pulse-collector` fields
 

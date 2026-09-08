@@ -33,12 +33,12 @@ func (s dnsSource) Read() (model.Event, error) {
 
 // newDNSPipeline builds the DNS telemetry pipeline. See
 // newProcessPipeline's doc comment for the Load/Attach/Close contract.
-func (a *App) newDNSPipeline(loader dnsLoader, corr *correlation.Correlator) *pipeline.Pipeline {
+func (a *App) newDNSPipeline(loader dnsLoader, corrProcessor *correlation.CorrelatingProcessor) *pipeline.Pipeline {
 	return pipeline.New(
 		pipeline.Config{Name: "dns telemetry", Workers: 2, QueueSize: 256},
 		containerEnrichingSource{inner: dnsSource{loader: loader, nodeName: a.cfg.NodeName}},
 		a.logger,
 		&pipeline.LoggingProcessor{Logger: a.logger},
-		&correlation.CorrelatingProcessor{Correlator: corr, Logger: a.logger},
+		corrProcessor,
 	)
 }

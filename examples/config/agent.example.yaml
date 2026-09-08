@@ -17,3 +17,9 @@ logging:
   level: info
   # One of: json (machine-readable, production default), text (human-readable).
   format: json
+
+# OTLP/gRPC collector address to export correlated spans to, e.g.
+# "localhost:4317". Uncomment to enable export — left unset (the
+# default), pulse-agent never dials a collector at all. See
+# docs/design/otlp-export.md.
+# otlp_endpoint: localhost:4317

@@ -3,8 +3,8 @@
 // (process discovery, network connection telemetry, socket data
 // telemetry, HTTP visibility, DNS telemetry) run through a shared
 // internal/pipeline per capability with a shared internal/correlation
-// stage across all of them, and graceful shutdown on context
-// cancellation.
+// stage across all of them and optional internal/otlp export, and
+// graceful shutdown on context cancellation.
 package agent
 
 import (
@@ -18,6 +18,7 @@ import (
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/dns"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/httpvis"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/network"
+	"github.com/Gorakhnath-R-Patil/Pulse/internal/otlp"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/pipeline"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/process"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/socket"
@@ -83,8 +84,34 @@ func (a *App) Run(ctx context.Context) error {
 
 	// One Correlator shared across every capability below is what lets
 	// e.g. a process's DNS query and its subsequent TCP connect end up
-	// in the same trace — see docs/design/trace-correlation.md.
-	correlator := correlation.New(correlationWindow)
+	// in the same trace — see docs/design/trace-correlation.md. One
+	// CorrelatingProcessor built from it, also shared, is what lets
+	// every pipeline log (and, if OTLPEndpoint is set, export) through
+	// the exact same correlation step rather than each computing its
+	// own — see internal/correlation's doc comment on why correlating
+	// twice would produce two different spans for one event.
+	corrProcessor := &correlation.CorrelatingProcessor{
+		Correlator: correlation.New(correlationWindow),
+		Logger:     a.logger,
+	}
+
+	var exporter *otlp.BatchExporter
+	var exporterDone sync.WaitGroup
+	if a.cfg.OTLPEndpoint != "" {
+		var err error
+		exporter, err = otlp.NewBatchExporter(otlp.DefaultConfig(a.cfg.OTLPEndpoint), a.cfg.NodeName, a.logger)
+		if err != nil {
+			a.logger.Warn("otlp export unavailable", "error", err)
+		} else {
+			corrProcessor.Exporter = exporter
+			a.logger.Info("otlp export active", "endpoint", a.cfg.OTLPEndpoint)
+			exporterDone.Add(1)
+			go func() {
+				defer exporterDone.Done()
+				exporter.Run(ctx)
+			}()
+		}
+	}
 
 	processLoader := process.NewLoader()
 	networkLoader := network.NewLoader()
@@ -93,11 +120,11 @@ func (a *App) Run(ctx context.Context) error {
 	dnsLoader := dns.NewLoader()
 
 	candidates := []capability{
-		{"process discovery", processLoader, a.newProcessPipeline(processLoader, correlator)},
-		{"network connection telemetry", networkLoader, a.newNetworkPipeline(networkLoader, correlator)},
-		{"socket data telemetry", socketLoader, a.newSocketPipeline(socketLoader, correlator)},
-		{"http visibility", httpvisLoader, a.newHTTPVisPipeline(httpvisLoader, correlator)},
-		{"dns telemetry", dnsLoader, a.newDNSPipeline(dnsLoader, correlator)},
+		{"process discovery", processLoader, a.newProcessPipeline(processLoader, corrProcessor)},
+		{"network connection telemetry", networkLoader, a.newNetworkPipeline(networkLoader, corrProcessor)},
+		{"socket data telemetry", socketLoader, a.newSocketPipeline(socketLoader, corrProcessor)},
+		{"http visibility", httpvisLoader, a.newHTTPVisPipeline(httpvisLoader, corrProcessor)},
+		{"dns telemetry", dnsLoader, a.newDNSPipeline(dnsLoader, corrProcessor)},
 	}
 
 	var active []capability
@@ -130,6 +157,15 @@ func (a *App) Run(ctx context.Context) error {
 		c.loader.Close()
 	}
 	running.Wait()
+
+	// The exporter's own Run goroutine already stops (and flushes
+	// whatever was queued) on ctx cancellation; wait for it to actually
+	// finish before closing its connection, or a still-in-flight final
+	// export could be cut off mid-call.
+	if exporter != nil {
+		exporterDone.Wait()
+		exporter.Close()
+	}
 
 	return nil
 }

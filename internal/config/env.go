@@ -9,6 +9,11 @@ import "os"
 const (
 	envLogLevel  = "PULSE_LOG_LEVEL"
 	envLogFormat = "PULSE_LOG_FORMAT"
+
+	// envOTLPEndpoint is pulse-agent-specific, unlike the PULSE_LOG_*
+	// variables above, which every component honors — see
+	// applyAgentEnvOverrides.
+	envOTLPEndpoint = "PULSE_OTLP_ENDPOINT"
 )
 
 // applyLoggingEnvOverrides mutates cfg in place with any of the
@@ -19,5 +24,14 @@ func applyLoggingEnvOverrides(cfg *LoggingConfig) {
 	}
 	if v := os.Getenv(envLogFormat); v != "" {
 		cfg.Format = v
+	}
+}
+
+// applyAgentEnvOverrides mutates cfg in place with any PULSE_* variables
+// specific to pulse-agent (as opposed to the shared PULSE_LOG_*
+// variables applyLoggingEnvOverrides already applies to cfg.Logging).
+func applyAgentEnvOverrides(cfg *AgentConfig) {
+	if v := os.Getenv(envOTLPEndpoint); v != "" {
+		cfg.OTLPEndpoint = v
 	}
 }
