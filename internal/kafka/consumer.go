@@ -51,6 +51,16 @@ func NewConsumer(cfg ConsumerConfig) *Consumer {
 			Brokers: cfg.Brokers,
 			Topic:   cfg.Topic,
 			GroupID: cfg.GroupID,
+			// A GroupID with no committed offset yet defaults (per
+			// kafka-go's own documented behavior) to Kafka's standard
+			// consumer default, which is "latest" — skip anything
+			// already on the topic and only see new messages from here
+			// on. That's the wrong default for telemetry ingestion: a
+			// pulse-collector joining a topic for the first time should
+			// see everything already produced, not silently start
+			// partway through. FirstOffset makes that explicit rather
+			// than relying on an implicit default.
+			StartOffset: kafkago.FirstOffset,
 		}),
 	}
 }
