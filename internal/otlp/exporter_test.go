@@ -119,6 +119,31 @@ func newTestExporter(t *testing.T, cfg otlp.Config) (*otlp.BatchExporter, *bytes
 	return exp, &logBuf
 }
 
+// startExporter runs exp.Run in the background and registers a
+// t.Cleanup that cancels ctx and waits for Run to actually return
+// before the test ends — mirroring the ordering internal/agent.Run
+// itself relies on (see agent.go's exporterDone) so Close(), registered
+// separately by newTestExporter, never races Run's own in-flight
+// shutdown-drain export by closing the connection out from under it.
+// Cleanups run LIFO, so calling this after newTestExporter guarantees
+// this one — cancel, then wait — runs before that Close().
+func startExporter(t *testing.T, exp *otlp.BatchExporter, ctx context.Context, cancel context.CancelFunc) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		exp.Run(ctx)
+		close(done)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Error("exporter Run() did not return within 2s of its context being canceled")
+		}
+	})
+}
+
 func TestBatchExporter_FlushesOnBatchSize(t *testing.T) {
 	srv := &fakeTraceServer{}
 	addr := startFakeCollector(t, srv)
@@ -129,8 +154,7 @@ func TestBatchExporter_FlushesOnBatchSize(t *testing.T) {
 	exp, _ := newTestExporter(t, cfg)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go exp.Run(ctx)
+	startExporter(t, exp, ctx, cancel)
 
 	for i := 0; i < 3; i++ {
 		exp.Enqueue(testSpan("span"))
@@ -159,8 +183,7 @@ func TestBatchExporter_FlushesOnInterval(t *testing.T) {
 	exp, _ := newTestExporter(t, cfg)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go exp.Run(ctx)
+	startExporter(t, exp, ctx, cancel)
 
 	exp.Enqueue(testSpan("span"))
 
@@ -185,8 +208,7 @@ func TestBatchExporter_RetriesThenSucceeds(t *testing.T) {
 	exp, logBuf := newTestExporter(t, cfg)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go exp.Run(ctx)
+	startExporter(t, exp, ctx, cancel)
 
 	exp.Enqueue(testSpan("span"))
 
@@ -211,8 +233,7 @@ func TestBatchExporter_GivesUpAfterMaxRetries(t *testing.T) {
 	exp, logBuf := newTestExporter(t, cfg)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go exp.Run(ctx)
+	startExporter(t, exp, ctx, cancel)
 
 	exp.Enqueue(testSpan("span"))
 
@@ -241,8 +262,7 @@ func TestBatchExporter_ExportTimeout(t *testing.T) {
 	exp, logBuf := newTestExporter(t, cfg)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go exp.Run(ctx)
+	startExporter(t, exp, ctx, cancel)
 
 	exp.Enqueue(testSpan("span"))
 
