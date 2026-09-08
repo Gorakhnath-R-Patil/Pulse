@@ -108,7 +108,25 @@ jobs:
           echo "Kafka never became reachable on localhost:9092" >&2
           exit 1
 
+      # Runs with output captured to a file rather than straight to the
+      # job log: this project has no authenticated GitHub access (no
+      # `gh auth login` completed, no repo-admin API access), and the
+      # Actions log-download API refuses an unauthenticated read on
+      # this public repo — but a `::error::` workflow command *does*
+      # surface as a check-run annotation, which the public API allows
+      # reading. On failure, emit the tail of the actual test output
+      # that way, so a failure here is actually diagnosable rather than
+      # only ever showing "Process completed with exit code 1".
       - name: Test internal/kafka (real broker)
-        run: go test ./internal/kafka/... -v -count=1
+        run: |
+          if ! go test ./internal/kafka/... -v -count=1 2>&1 | tee test-output.log; then
+            # GitHub's ::error:: command needs %, \r, \n percent-encoded
+            # to render a multi-line message in one annotation — % must
+            # be escaped first, or the %0D/%0A this introduces would
+            # themselves get mangled by a later %-escape pass.
+            msg="$(tail -c 3000 test-output.log | sed -e 's/%/%25/g' | sed -e ':a;N;$!ba' -e 's/\r/%0D/g' -e 's/\n/%0A/g')"
+            echo "::error::${msg}"
+            exit 1
+          fi
         env:
           PULSE_TEST_KAFKA_BROKERS: localhost:9092
