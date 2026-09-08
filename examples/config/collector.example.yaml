@@ -35,3 +35,8 @@ logging:
 # clickhouse_username: default
 # clickhouse_password: ""
 # clickhouse_table: events
+
+# Address to serve Prometheus metrics on at /metrics, e.g. ":9091".
+# Independent of Kafka/ClickHouse above — works even with neither
+# configured. See docs/design/metrics.md.
+# metrics_addr: ":9091"

@@ -40,6 +40,11 @@ const (
 	envClickHouseUsername = "PULSE_CLICKHOUSE_USERNAME"
 	envClickHousePassword = "PULSE_CLICKHOUSE_PASSWORD"
 	envClickHouseTable    = "PULSE_CLICKHOUSE_TABLE"
+
+	// envMetricsAddr is shared by both binaries — each has its own
+	// MetricsAddr field — see applyAgentEnvOverrides and
+	// applyCollectorEnvOverrides.
+	envMetricsAddr = "PULSE_METRICS_ADDR"
 )
 
 // splitAddrList parses a comma-separated env var value (a broker or
@@ -81,6 +86,9 @@ func applyAgentEnvOverrides(cfg *AgentConfig) {
 	if v := os.Getenv(envKafkaTopic); v != "" {
 		cfg.KafkaTopic = v
 	}
+	if v := os.Getenv(envMetricsAddr); v != "" {
+		cfg.MetricsAddr = v
+	}
 }
 
 // applyCollectorEnvOverrides mutates cfg in place with any PULSE_*
@@ -109,5 +117,8 @@ func applyCollectorEnvOverrides(cfg *CollectorConfig) {
 	}
 	if v := os.Getenv(envClickHouseTable); v != "" {
 		cfg.ClickHouseTable = v
+	}
+	if v := os.Getenv(envMetricsAddr); v != "" {
+		cfg.MetricsAddr = v
 	}
 }

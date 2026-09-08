@@ -171,6 +171,7 @@ internal/otlp/        OTLP/gRPC export: batches and sends correlated spans to a 
 internal/kafka/       Kafka transport: produces events from pulse-agent, consumes them in pulse-collector.
 internal/storage/     ClickHouse storage: batches and writes consumed events into a real ClickHouse table.
 internal/topology/    Service topology: queries stored events into a dependency graph (pulse-cli topology).
+internal/metrics/     Prometheus metrics: derives counters/histograms from events, serves /metrics.
 pkg/model/           Canonical telemetry Event and its sub-structures — the shared data contract.
 proto/               Wire-format contracts (.proto), checked in ahead of any code generation.
 bpf/programs/        Hand-written eBPF C source.

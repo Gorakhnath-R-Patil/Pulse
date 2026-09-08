@@ -43,6 +43,13 @@ type CollectorConfig struct {
 	// ClickHouseTable is the table events are stored in. Defaults to
 	// "events" if ClickHouseAddr is set and this is left empty.
 	ClickHouseTable string `yaml:"clickhouse_table,omitempty"`
+
+	// MetricsAddr is an address (e.g. ":9091") to serve Prometheus
+	// metrics on at /metrics — pulse-collector's own consumption
+	// metrics, the collector-side counterpart to pulse-agent's
+	// MetricsAddr. Empty (the default) disables it. See
+	// docs/design/metrics.md.
+	MetricsAddr string `yaml:"metrics_addr,omitempty"`
 }
 
 // DefaultCollectorConfig returns the configuration used when no file is

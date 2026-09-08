@@ -6,7 +6,7 @@ connections, HTTP/DNS traffic, process activity — with little to no
 application instrumentation, and turns that into distributed traces,
 service dependency graphs, and metrics.
 
-> **Status: early-stage, active development (Day 16 of a 25-day build).**
+> **Status: early-stage, active development (Day 17 of a 25-day build).**
 > This is not yet functional software — see [What works today](#what-works-today).
 > Nothing here should be treated as production-ready until the roadmap
 > below says so explicitly.
@@ -179,6 +179,14 @@ behind specific technical choices as they're made, day by day.
   in this project has ever captured the *receiving* side of a
   connection — the same gap `docs/design/trace-correlation.md` already
   documented for tracing.
+- Metrics ([`internal/metrics`](internal/metrics)): both `pulse-agent`
+  and `pulse-collector` can now serve real Prometheus metrics at
+  `/metrics` — event counts, TCP connect success/failure, bytes sent/
+  received, HTTP request counts by method/status, DNS query counts and
+  real query latency — opt-in via `metrics_addr`, off by default (each
+  binary answers only for itself, the standard Prometheus multi-target
+  model — see
+  [docs/design/metrics.md](docs/design/metrics.md)).
 
 This is real, kernel-observed telemetry, not a placeholder — run
 `pulse-agent` on Linux and it logs every process that starts or exits,
@@ -187,9 +195,10 @@ close, every cleartext HTTP request/response line, and every DNS
 query/response with real latency — each one now also correlated into a
 trace, optionally exported to a real OTLP collector, optionally
 produced to a real Kafka topic, optionally stored durably in
-ClickHouse once `pulse-collector` consumes it back, and queryable as a
-real (if egress-only) service dependency graph. What's not here yet:
-cross-service tracing and a metrics engine — later in the roadmap.
+ClickHouse once `pulse-collector` consumes it back, queryable as a real
+(if egress-only) service dependency graph, and optionally exposed as
+real Prometheus metrics from either binary. What's not here yet:
+cross-service tracing and Grafana dashboards — later in the roadmap.
 
 ## Getting started
 

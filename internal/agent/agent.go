@@ -3,9 +3,9 @@
 // (process discovery, network connection telemetry, socket data
 // telemetry, HTTP visibility, DNS telemetry) run through a shared
 // internal/pipeline per capability with a shared internal/correlation
-// stage across all of them and optional internal/otlp export and
-// internal/kafka production, and graceful shutdown on context
-// cancellation.
+// stage across all of them and optional internal/otlp export,
+// internal/kafka production, and internal/metrics exposition, and
+// graceful shutdown on context cancellation.
 package agent
 
 import (
@@ -19,6 +19,7 @@ import (
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/dns"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/httpvis"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/kafka"
+	"github.com/Gorakhnath-R-Patil/Pulse/internal/metrics"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/network"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/otlp"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/pipeline"
@@ -122,12 +123,34 @@ func (a *App) Run(ctx context.Context) error {
 	// kafka-go's Writer batches internally and Close flushes it
 	// synchronously, so shutdown only needs to call Close once every
 	// pipeline has stopped producing to it.
+	var extra []pipeline.EventProcessor
+
 	var kafkaProducer *kafka.Producer
-	var kafkaExtra []pipeline.EventProcessor
 	if len(a.cfg.KafkaBrokers) > 0 {
 		kafkaProducer = kafka.NewProducer(kafka.ProducerConfig{Brokers: a.cfg.KafkaBrokers, Topic: a.cfg.KafkaTopic})
-		kafkaExtra = []pipeline.EventProcessor{&kafka.ProducingProcessor{Producer: kafkaProducer}}
+		extra = append(extra, &kafka.ProducingProcessor{Producer: kafkaProducer})
 		a.logger.Info("kafka production active", "brokers", a.cfg.KafkaBrokers, "topic", a.cfg.KafkaTopic)
+	}
+
+	// Metrics recording is the same shape again: one more optional
+	// processor, plus a background HTTP server (like the OTLP
+	// exporter's Run, not like Kafka's Producer, since serving
+	// /metrics is itself an ongoing job, not a batched write) that
+	// Run waits on during shutdown. See docs/design/metrics.md.
+	var metricsServer *metrics.Server
+	var metricsServerDone sync.WaitGroup
+	if a.cfg.MetricsAddr != "" {
+		registry := metrics.New()
+		extra = append(extra, &metrics.Processor{Registry: registry})
+		metricsServer = metrics.NewServer(a.cfg.MetricsAddr, registry)
+		a.logger.Info("metrics server active", "addr", a.cfg.MetricsAddr)
+		metricsServerDone.Add(1)
+		go func() {
+			defer metricsServerDone.Done()
+			if err := metricsServer.Run(ctx); err != nil {
+				a.logger.Warn("metrics server stopped", "error", err)
+			}
+		}()
 	}
 
 	processLoader := process.NewLoader()
@@ -137,11 +160,11 @@ func (a *App) Run(ctx context.Context) error {
 	dnsLoader := dns.NewLoader()
 
 	candidates := []capability{
-		{"process discovery", processLoader, a.newProcessPipeline(processLoader, corrProcessor, kafkaExtra...)},
-		{"network connection telemetry", networkLoader, a.newNetworkPipeline(networkLoader, corrProcessor, kafkaExtra...)},
-		{"socket data telemetry", socketLoader, a.newSocketPipeline(socketLoader, corrProcessor, kafkaExtra...)},
-		{"http visibility", httpvisLoader, a.newHTTPVisPipeline(httpvisLoader, corrProcessor, kafkaExtra...)},
-		{"dns telemetry", dnsLoader, a.newDNSPipeline(dnsLoader, corrProcessor, kafkaExtra...)},
+		{"process discovery", processLoader, a.newProcessPipeline(processLoader, corrProcessor, extra...)},
+		{"network connection telemetry", networkLoader, a.newNetworkPipeline(networkLoader, corrProcessor, extra...)},
+		{"socket data telemetry", socketLoader, a.newSocketPipeline(socketLoader, corrProcessor, extra...)},
+		{"http visibility", httpvisLoader, a.newHTTPVisPipeline(httpvisLoader, corrProcessor, extra...)},
+		{"dns telemetry", dnsLoader, a.newDNSPipeline(dnsLoader, corrProcessor, extra...)},
 	}
 
 	var active []capability
@@ -193,6 +216,11 @@ func (a *App) Run(ctx context.Context) error {
 			a.logger.Warn("kafka producer close failed", "error", err)
 		}
 	}
+
+	// metricsServer.Run already began its own graceful shutdown the
+	// moment ctx was canceled above (it watches the same ctx); wait
+	// for that to actually finish before returning.
+	metricsServerDone.Wait()
 
 	return nil
 }

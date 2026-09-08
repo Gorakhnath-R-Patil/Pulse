@@ -179,3 +179,25 @@ func TestLoadCollectorConfig_ClickHouseDatabaseAndTableEnvOverride(t *testing.T)
 		t.Errorf("ClickHouseTable = %q, want env override %q", cfg.ClickHouseTable, "custom_events")
 	}
 }
+
+func TestLoadCollectorConfig_MetricsAddrDefaultsEmpty(t *testing.T) {
+	cfg, err := config.LoadCollectorConfig("")
+	if err != nil {
+		t.Fatalf("LoadCollectorConfig(\"\") returned error: %v", err)
+	}
+	if cfg.MetricsAddr != "" {
+		t.Errorf("MetricsAddr = %q, want empty by default (metrics server disabled)", cfg.MetricsAddr)
+	}
+}
+
+func TestLoadCollectorConfig_MetricsAddrEnvOverride(t *testing.T) {
+	t.Setenv("PULSE_METRICS_ADDR", ":9091")
+
+	cfg, err := config.LoadCollectorConfig("")
+	if err != nil {
+		t.Fatalf("LoadCollectorConfig(\"\") returned error: %v", err)
+	}
+	if cfg.MetricsAddr != ":9091" {
+		t.Errorf("MetricsAddr = %q, want env override %q", cfg.MetricsAddr, ":9091")
+	}
+}

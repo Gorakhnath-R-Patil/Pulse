@@ -25,7 +25,8 @@ previous:
    `PULSE_CLICKHOUSE_DATABASE`, `PULSE_CLICKHOUSE_USERNAME`,
    `PULSE_CLICKHOUSE_PASSWORD`, and `PULSE_CLICKHOUSE_TABLE`
    (`pulse-collector` only) override the corresponding
-   `clickhouse_*` fields. This matches the common container pattern of
+   `clickhouse_*` fields; `PULSE_METRICS_ADDR` overrides `metrics_addr`
+   for both binaries. This matches the common container pattern of
    overriding a mounted config file at deploy time without editing it.
 4. **Validation** — the fully-resolved config is validated before the
    loader returns it. Any failure here is also a startup error
@@ -45,6 +46,7 @@ ignored key.
 | `otlp_endpoint`   | string | (empty, export disabled) | OTLP/gRPC collector address, e.g. `localhost:4317`. See `docs/design/otlp-export.md`. |
 | `kafka_brokers`   | list of strings | (empty, production disabled) | Kafka bootstrap addresses, e.g. `[localhost:9092]`. Must be set together with `kafka_topic`. See `docs/design/kafka-transport.md`. |
 | `kafka_topic`     | string | (empty) | Topic events are produced to. Must be set together with `kafka_brokers`. |
+| `metrics_addr`    | string | (empty, metrics server disabled) | Address to serve Prometheus metrics on, e.g. `:9090`. See `docs/design/metrics.md`. |
 
 ## `pulse-collector` fields
 
@@ -60,6 +62,7 @@ ignored key.
 | `clickhouse_username` | string | (empty → ClickHouse's own `default`) | |
 | `clickhouse_password` | string | (empty) | |
 | `clickhouse_table`    | string | `events` (once `clickhouse_addr` is set) | Table events are stored in; created automatically if it doesn't exist. |
+| `metrics_addr`    | string | (empty, metrics server disabled) | Address to serve Prometheus metrics on, e.g. `:9091`. Independent of Kafka/ClickHouse — see `docs/design/metrics.md`. |
 
 The collector's schema grows as ingestion (Kafka, Day 14) and storage
 (ClickHouse, Day 15 — both above) are implemented.

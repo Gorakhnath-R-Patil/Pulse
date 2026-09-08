@@ -31,6 +31,12 @@ type AgentConfig struct {
 	// KafkaTopic is the topic events are produced to. Required if
 	// KafkaBrokers is set; ignored otherwise.
 	KafkaTopic string `yaml:"kafka_topic,omitempty"`
+
+	// MetricsAddr is an address (e.g. ":9090") to serve Prometheus
+	// metrics on at /metrics. Empty (the default) disables the metrics
+	// server entirely — pulse-agent never opens a listener nobody
+	// asked for. See docs/design/metrics.md.
+	MetricsAddr string `yaml:"metrics_addr,omitempty"`
 }
 
 // DefaultAgentConfig returns the configuration used when no file is

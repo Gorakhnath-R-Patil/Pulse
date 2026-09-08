@@ -31,3 +31,8 @@ logging:
 # kafka_brokers:
 #   - localhost:9092
 # kafka_topic: pulse-events
+
+# Address to serve Prometheus metrics on at /metrics, e.g. ":9090".
+# Uncomment to enable — left unset (the default), pulse-agent never
+# opens a listener nobody asked for. See docs/design/metrics.md.
+# metrics_addr: ":9090"

@@ -176,3 +176,25 @@ func TestLoadAgentConfig_KafkaBrokersWithoutTopicIsError(t *testing.T) {
 		t.Fatalf("LoadAgentConfig() error = %v, want it to wrap ErrInvalidValue (kafka_brokers without kafka_topic)", err)
 	}
 }
+
+func TestLoadAgentConfig_MetricsAddrDefaultsEmpty(t *testing.T) {
+	cfg, err := config.LoadAgentConfig("")
+	if err != nil {
+		t.Fatalf("LoadAgentConfig(\"\") returned error: %v", err)
+	}
+	if cfg.MetricsAddr != "" {
+		t.Errorf("MetricsAddr = %q, want empty by default (metrics server disabled)", cfg.MetricsAddr)
+	}
+}
+
+func TestLoadAgentConfig_MetricsAddrEnvOverride(t *testing.T) {
+	t.Setenv("PULSE_METRICS_ADDR", ":9090")
+
+	cfg, err := config.LoadAgentConfig("")
+	if err != nil {
+		t.Fatalf("LoadAgentConfig(\"\") returned error: %v", err)
+	}
+	if cfg.MetricsAddr != ":9090" {
+		t.Errorf("MetricsAddr = %q, want env override %q", cfg.MetricsAddr, ":9090")
+	}
+}
