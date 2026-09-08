@@ -106,17 +106,40 @@ func testSpan(name string) model.Span {
 	}
 }
 
-func newTestExporter(t *testing.T, cfg otlp.Config) (*otlp.BatchExporter, *bytes.Buffer) {
+// syncLogBuffer is a mutex-protected bytes.Buffer. Several tests below
+// poll a BatchExporter's log output from the test goroutine while its
+// background Run goroutine may still be writing to it (via
+// exportWithRetry's Warn calls) — a plain bytes.Buffer is not safe for
+// that concurrent read/write. Mirrors internal/agent's own syncBuffer
+// (see process_test.go there), introduced for exactly this reason.
+type syncLogBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncLogBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncLogBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func newTestExporter(t *testing.T, cfg otlp.Config) (*otlp.BatchExporter, *syncLogBuffer) {
 	t.Helper()
-	var logBuf bytes.Buffer
-	logger := slog.New(slog.NewTextHandler(&logBuf, nil))
+	logBuf := &syncLogBuffer{}
+	logger := slog.New(slog.NewTextHandler(logBuf, nil))
 
 	exp, err := otlp.NewBatchExporter(cfg, "pulse-node-1", logger)
 	if err != nil {
 		t.Fatalf("NewBatchExporter() returned error: %v", err)
 	}
 	t.Cleanup(func() { _ = exp.Close() })
-	return exp, &logBuf
+	return exp, logBuf
 }
 
 // startExporter runs exp.Run in the background and registers a
