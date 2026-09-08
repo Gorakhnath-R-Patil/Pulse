@@ -8,6 +8,7 @@ require (
 )
 
 require (
+	github.com/segmentio/kafka-go v0.4.51
 	go.opentelemetry.io/proto/otlp v1.11.0
 	golang.org/x/sys v0.47.0
 	google.golang.org/grpc v1.83.2
@@ -15,6 +16,8 @@ require (
 
 require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
+	github.com/klauspost/compress v1.18.0 // indirect
+	github.com/pierrec/lz4/v4 v4.1.15 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260720211330-0afa2a65878a // indirect

@@ -54,3 +54,65 @@ func TestLoadCollectorConfig_ValidationFailure(t *testing.T) {
 		t.Fatalf("LoadCollectorConfig() error = %v, want it to wrap ErrInvalidValue", err)
 	}
 }
+
+func TestLoadCollectorConfig_KafkaDefaultsDisabled(t *testing.T) {
+	cfg, err := config.LoadCollectorConfig("")
+	if err != nil {
+		t.Fatalf("LoadCollectorConfig(\"\") returned error: %v", err)
+	}
+	if len(cfg.KafkaBrokers) != 0 {
+		t.Errorf("KafkaBrokers = %v, want empty by default (consumption disabled)", cfg.KafkaBrokers)
+	}
+}
+
+func TestLoadCollectorConfig_KafkaEnvOverride(t *testing.T) {
+	t.Setenv("PULSE_KAFKA_BROKERS", "localhost:9092")
+	t.Setenv("PULSE_KAFKA_TOPIC", "pulse-events")
+
+	cfg, err := config.LoadCollectorConfig("")
+	if err != nil {
+		t.Fatalf("LoadCollectorConfig(\"\") returned error: %v", err)
+	}
+	if len(cfg.KafkaBrokers) != 1 || cfg.KafkaBrokers[0] != "localhost:9092" {
+		t.Errorf("KafkaBrokers = %v, want [localhost:9092]", cfg.KafkaBrokers)
+	}
+	if cfg.KafkaTopic != "pulse-events" {
+		t.Errorf("KafkaTopic = %q, want %q", cfg.KafkaTopic, "pulse-events")
+	}
+}
+
+func TestLoadCollectorConfig_KafkaGroupIDDefaultsWhenBrokersSet(t *testing.T) {
+	t.Setenv("PULSE_KAFKA_BROKERS", "localhost:9092")
+	t.Setenv("PULSE_KAFKA_TOPIC", "pulse-events")
+
+	cfg, err := config.LoadCollectorConfig("")
+	if err != nil {
+		t.Fatalf("LoadCollectorConfig(\"\") returned error: %v", err)
+	}
+	if cfg.KafkaGroupID != "pulse-collector" {
+		t.Errorf("KafkaGroupID = %q, want default %q", cfg.KafkaGroupID, "pulse-collector")
+	}
+}
+
+func TestLoadCollectorConfig_KafkaGroupIDEnvOverride(t *testing.T) {
+	t.Setenv("PULSE_KAFKA_BROKERS", "localhost:9092")
+	t.Setenv("PULSE_KAFKA_TOPIC", "pulse-events")
+	t.Setenv("PULSE_KAFKA_GROUP_ID", "custom-group")
+
+	cfg, err := config.LoadCollectorConfig("")
+	if err != nil {
+		t.Fatalf("LoadCollectorConfig(\"\") returned error: %v", err)
+	}
+	if cfg.KafkaGroupID != "custom-group" {
+		t.Errorf("KafkaGroupID = %q, want env override %q", cfg.KafkaGroupID, "custom-group")
+	}
+}
+
+func TestLoadCollectorConfig_KafkaTopicWithoutBrokersIsError(t *testing.T) {
+	t.Setenv("PULSE_KAFKA_TOPIC", "pulse-events")
+
+	_, err := config.LoadCollectorConfig("")
+	if !errors.Is(err, config.ErrInvalidValue) {
+		t.Fatalf("LoadCollectorConfig() error = %v, want it to wrap ErrInvalidValue (kafka_topic without kafka_brokers)", err)
+	}
+}

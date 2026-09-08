@@ -131,3 +131,48 @@ func TestLoadAgentConfig_OTLPEndpointEnvOverride(t *testing.T) {
 		t.Errorf("OTLPEndpoint = %q, want env override %q", cfg.OTLPEndpoint, "localhost:4317")
 	}
 }
+
+func TestLoadAgentConfig_KafkaDefaultsDisabled(t *testing.T) {
+	cfg, err := config.LoadAgentConfig("")
+	if err != nil {
+		t.Fatalf("LoadAgentConfig(\"\") returned error: %v", err)
+	}
+	if len(cfg.KafkaBrokers) != 0 {
+		t.Errorf("KafkaBrokers = %v, want empty by default (production disabled)", cfg.KafkaBrokers)
+	}
+}
+
+func TestLoadAgentConfig_KafkaEnvOverride(t *testing.T) {
+	t.Setenv("PULSE_KAFKA_BROKERS", "localhost:9092, localhost:9093")
+	t.Setenv("PULSE_KAFKA_TOPIC", "pulse-events")
+
+	cfg, err := config.LoadAgentConfig("")
+	if err != nil {
+		t.Fatalf("LoadAgentConfig(\"\") returned error: %v", err)
+	}
+	wantBrokers := []string{"localhost:9092", "localhost:9093"}
+	if len(cfg.KafkaBrokers) != len(wantBrokers) || cfg.KafkaBrokers[0] != wantBrokers[0] || cfg.KafkaBrokers[1] != wantBrokers[1] {
+		t.Errorf("KafkaBrokers = %v, want %v (whitespace trimmed)", cfg.KafkaBrokers, wantBrokers)
+	}
+	if cfg.KafkaTopic != "pulse-events" {
+		t.Errorf("KafkaTopic = %q, want %q", cfg.KafkaTopic, "pulse-events")
+	}
+}
+
+func TestLoadAgentConfig_KafkaTopicWithoutBrokersIsError(t *testing.T) {
+	t.Setenv("PULSE_KAFKA_TOPIC", "pulse-events")
+
+	_, err := config.LoadAgentConfig("")
+	if !errors.Is(err, config.ErrInvalidValue) {
+		t.Fatalf("LoadAgentConfig() error = %v, want it to wrap ErrInvalidValue (kafka_topic without kafka_brokers)", err)
+	}
+}
+
+func TestLoadAgentConfig_KafkaBrokersWithoutTopicIsError(t *testing.T) {
+	t.Setenv("PULSE_KAFKA_BROKERS", "localhost:9092")
+
+	_, err := config.LoadAgentConfig("")
+	if !errors.Is(err, config.ErrInvalidValue) {
+		t.Fatalf("LoadAgentConfig() error = %v, want it to wrap ErrInvalidValue (kafka_brokers without kafka_topic)", err)
+	}
+}

@@ -65,3 +65,50 @@ jobs:
       # real-HTTP-write, and real-DNS-query/response integration tests.
       - name: Test eBPF loaders (privileged)
         run: sudo -E env "PATH=$PATH" go test ./internal/ebpf/... ./internal/process/... ./internal/network/... ./internal/socket/... ./internal/httpvis/... ./internal/dns/... -v -run TestLoader
+
+  kafka-integration:
+    name: Kafka integration tests
+    runs-on: ubuntu-latest
+    # apache/kafka's official image runs a single-node KRaft broker
+    # (no separate ZooKeeper container needed) with sensible defaults
+    # when started with no extra configuration, listening on 9092 — see
+    # docs/design/kafka-transport.md for why this is the one piece of
+    # this project's CI that needed a service container rather than
+    # running everywhere: there is no Kafka broker, and no Docker to
+    # run one, on this project's Windows dev machine.
+    services:
+      kafka:
+        image: apache/kafka:3.7.0
+        ports:
+          - 9092:9092
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      # The service container starts in parallel with this job's own
+      # setup steps, not necessarily before them; give the broker a
+      # moment to finish its own startup before the first test dials
+      # it, rather than relying on the very first connection attempt's
+      # own retry/timeout behavior to paper over that.
+      - name: Wait for Kafka to accept connections
+        run: |
+          for i in $(seq 1 30); do
+            if (exec 3<>/dev/tcp/localhost/9092) 2>/dev/null; then
+              exec 3<&- 3>&-
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Kafka never became reachable on localhost:9092" >&2
+          exit 1
+
+      - name: Test internal/kafka (real broker)
+        run: go test ./internal/kafka/... -v -count=1
+        env:
+          PULSE_TEST_KAFKA_BROKERS: localhost:9092

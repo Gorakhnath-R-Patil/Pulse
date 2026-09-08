@@ -3,8 +3,9 @@
 // (process discovery, network connection telemetry, socket data
 // telemetry, HTTP visibility, DNS telemetry) run through a shared
 // internal/pipeline per capability with a shared internal/correlation
-// stage across all of them and optional internal/otlp export, and
-// graceful shutdown on context cancellation.
+// stage across all of them and optional internal/otlp export and
+// internal/kafka production, and graceful shutdown on context
+// cancellation.
 package agent
 
 import (
@@ -17,6 +18,7 @@ import (
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/correlation"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/dns"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/httpvis"
+	"github.com/Gorakhnath-R-Patil/Pulse/internal/kafka"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/network"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/otlp"
 	"github.com/Gorakhnath-R-Patil/Pulse/internal/pipeline"
@@ -113,6 +115,21 @@ func (a *App) Run(ctx context.Context) error {
 		}
 	}
 
+	// Kafka production runs alongside (not instead of) logging and
+	// correlation, one more processor in every pipeline's chain — see
+	// docs/design/kafka-transport.md. Unlike the OTLP exporter, a
+	// kafka.Producer has no background Run loop of its own to wait on:
+	// kafka-go's Writer batches internally and Close flushes it
+	// synchronously, so shutdown only needs to call Close once every
+	// pipeline has stopped producing to it.
+	var kafkaProducer *kafka.Producer
+	var kafkaExtra []pipeline.EventProcessor
+	if len(a.cfg.KafkaBrokers) > 0 {
+		kafkaProducer = kafka.NewProducer(kafka.ProducerConfig{Brokers: a.cfg.KafkaBrokers, Topic: a.cfg.KafkaTopic})
+		kafkaExtra = []pipeline.EventProcessor{&kafka.ProducingProcessor{Producer: kafkaProducer}}
+		a.logger.Info("kafka production active", "brokers", a.cfg.KafkaBrokers, "topic", a.cfg.KafkaTopic)
+	}
+
 	processLoader := process.NewLoader()
 	networkLoader := network.NewLoader()
 	socketLoader := socket.NewLoader()
@@ -120,11 +137,11 @@ func (a *App) Run(ctx context.Context) error {
 	dnsLoader := dns.NewLoader()
 
 	candidates := []capability{
-		{"process discovery", processLoader, a.newProcessPipeline(processLoader, corrProcessor)},
-		{"network connection telemetry", networkLoader, a.newNetworkPipeline(networkLoader, corrProcessor)},
-		{"socket data telemetry", socketLoader, a.newSocketPipeline(socketLoader, corrProcessor)},
-		{"http visibility", httpvisLoader, a.newHTTPVisPipeline(httpvisLoader, corrProcessor)},
-		{"dns telemetry", dnsLoader, a.newDNSPipeline(dnsLoader, corrProcessor)},
+		{"process discovery", processLoader, a.newProcessPipeline(processLoader, corrProcessor, kafkaExtra...)},
+		{"network connection telemetry", networkLoader, a.newNetworkPipeline(networkLoader, corrProcessor, kafkaExtra...)},
+		{"socket data telemetry", socketLoader, a.newSocketPipeline(socketLoader, corrProcessor, kafkaExtra...)},
+		{"http visibility", httpvisLoader, a.newHTTPVisPipeline(httpvisLoader, corrProcessor, kafkaExtra...)},
+		{"dns telemetry", dnsLoader, a.newDNSPipeline(dnsLoader, corrProcessor, kafkaExtra...)},
 	}
 
 	var active []capability
@@ -165,6 +182,16 @@ func (a *App) Run(ctx context.Context) error {
 	if exporter != nil {
 		exporterDone.Wait()
 		exporter.Close()
+	}
+
+	// Every pipeline that could still call kafkaProducer.Produce has
+	// already stopped (running.Wait() above), so it's safe to close it
+	// now — unlike the exporter, there's no separate goroutine left to
+	// wait for.
+	if kafkaProducer != nil {
+		if err := kafkaProducer.Close(); err != nil {
+			a.logger.Warn("kafka producer close failed", "error", err)
+		}
 	}
 
 	return nil

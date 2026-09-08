@@ -20,6 +20,17 @@ type AgentConfig struct {
 	// default) disables export entirely — pulse-agent never tries to
 	// reach a made-up default endpoint. See docs/design/otlp-export.md.
 	OTLPEndpoint string `yaml:"otlp_endpoint,omitempty"`
+
+	// KafkaBrokers is a list of Kafka bootstrap addresses (e.g.
+	// ["localhost:9092"]) to produce every captured event to, in
+	// addition to — not instead of — each pipeline's existing logging
+	// and correlation steps. Empty (the default) disables Kafka
+	// production entirely. See docs/design/kafka-transport.md.
+	KafkaBrokers []string `yaml:"kafka_brokers,omitempty"`
+
+	// KafkaTopic is the topic events are produced to. Required if
+	// KafkaBrokers is set; ignored otherwise.
+	KafkaTopic string `yaml:"kafka_topic,omitempty"`
 }
 
 // DefaultAgentConfig returns the configuration used when no file is
@@ -46,6 +57,12 @@ func (c AgentConfig) Validate() error {
 	}
 	if err := c.Logging.Validate(); err != nil {
 		return err
+	}
+	if len(c.KafkaBrokers) > 0 && c.KafkaTopic == "" {
+		return fmt.Errorf("%w: kafka_topic must be set when kafka_brokers is set", ErrInvalidValue)
+	}
+	if len(c.KafkaBrokers) == 0 && c.KafkaTopic != "" {
+		return fmt.Errorf("%w: kafka_topic is set but kafka_brokers is empty", ErrInvalidValue)
 	}
 	return nil
 }

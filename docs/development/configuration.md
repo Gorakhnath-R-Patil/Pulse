@@ -17,9 +17,12 @@ previous:
    expects it to be read.
 3. **Environment variables** — `PULSE_LOG_LEVEL` and `PULSE_LOG_FORMAT`
    override `logging.level`/`logging.format` for both binaries;
-   `PULSE_OTLP_ENDPOINT` (`pulse-agent` only) overrides `otlp_endpoint`.
-   This matches the common container pattern of overriding a mounted
-   config file at deploy time without editing it.
+   `PULSE_OTLP_ENDPOINT` (`pulse-agent` only) overrides `otlp_endpoint`;
+   `PULSE_KAFKA_BROKERS` (comma-separated) and `PULSE_KAFKA_TOPIC`
+   override `kafka_brokers`/`kafka_topic` for both binaries;
+   `PULSE_KAFKA_GROUP_ID` (`pulse-collector` only) overrides
+   `kafka_group_id`. This matches the common container pattern of
+   overriding a mounted config file at deploy time without editing it.
 4. **Validation** — the fully-resolved config is validated before the
    loader returns it. Any failure here is also a startup error
    (`ErrInvalidValue`), never a silent correction.
@@ -36,6 +39,8 @@ ignored key.
 | `logging.level`   | string | `info`               | One of `debug`, `info`, `warn`, `error`.                            |
 | `logging.format`  | string | `json`               | One of `json`, `text`.                                              |
 | `otlp_endpoint`   | string | (empty, export disabled) | OTLP/gRPC collector address, e.g. `localhost:4317`. See `docs/design/otlp-export.md`. |
+| `kafka_brokers`   | list of strings | (empty, production disabled) | Kafka bootstrap addresses, e.g. `[localhost:9092]`. Must be set together with `kafka_topic`. See `docs/design/kafka-transport.md`. |
+| `kafka_topic`     | string | (empty) | Topic events are produced to. Must be set together with `kafka_brokers`. |
 
 ## `pulse-collector` fields
 
@@ -43,10 +48,12 @@ ignored key.
 |-------------------|--------|---------|---------------------------------------|
 | `logging.level`   | string | `info`  | One of `debug`, `info`, `warn`, `error`. |
 | `logging.format`  | string | `json`  | One of `json`, `text`.                |
+| `kafka_brokers`   | list of strings | (empty, consumption disabled) | Kafka bootstrap addresses. Must be set together with `kafka_topic`. |
+| `kafka_topic`     | string | (empty) | Topic events are consumed from — the same topic a producing `pulse-agent` is configured with. |
+| `kafka_group_id`  | string | `pulse-collector` (once `kafka_brokers` is set) | Kafka consumer group this collector joins. |
 
-The collector's schema is intentionally minimal today — it grows as
-ingestion (Kafka, Day 14) and storage (ClickHouse, Day 15) are
-implemented, not before.
+The collector's schema grows as ingestion (Kafka, Day 14 — above) and
+storage (ClickHouse, Day 15) are implemented.
 
 ## Validating a config file without starting a binary
 

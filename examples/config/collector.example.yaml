@@ -14,3 +14,13 @@
 logging:
   level: info
   format: json
+
+# Kafka broker addresses to consume events from, and the topic a
+# producing pulse-agent is configured with, e.g. "localhost:9092" /
+# "pulse-events". Uncomment both to enable consumption — left unset
+# (the default), pulse-collector never dials a broker at all. See
+# docs/design/kafka-transport.md.
+# kafka_brokers:
+#   - localhost:9092
+# kafka_topic: pulse-events
+# kafka_group_id: pulse-collector

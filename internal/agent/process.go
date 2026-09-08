@@ -47,13 +47,19 @@ func (s processSource) Read() (model.Event, error) {
 // and loader.Close() during shutdown — see capability/Run in agent.go.
 // corrProcessor is shared across every capability's pipeline so their
 // events correlate into the same traces — see
-// docs/design/trace-correlation.md.
-func (a *App) newProcessPipeline(loader processLoader, corrProcessor *correlation.CorrelatingProcessor) *pipeline.Pipeline {
+// docs/design/trace-correlation.md. extra is appended after it — e.g.
+// a *kafka.ProducingProcessor when Kafka production is configured, see
+// docs/design/kafka-transport.md — so a capability with nothing extra
+// configured (the common case in tests) can omit it entirely.
+func (a *App) newProcessPipeline(loader processLoader, corrProcessor *correlation.CorrelatingProcessor, extra ...pipeline.EventProcessor) *pipeline.Pipeline {
+	processors := append([]pipeline.EventProcessor{
+		&pipeline.LoggingProcessor{Logger: a.logger},
+		corrProcessor,
+	}, extra...)
 	return pipeline.New(
 		pipeline.Config{Name: "process discovery", Workers: 2, QueueSize: 256},
 		containerEnrichingSource{inner: processSource{loader: loader, nodeName: a.cfg.NodeName}},
 		a.logger,
-		&pipeline.LoggingProcessor{Logger: a.logger},
-		corrProcessor,
+		processors...,
 	)
 }

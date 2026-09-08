@@ -23,3 +23,11 @@ logging:
 # default), pulse-agent never dials a collector at all. See
 # docs/design/otlp-export.md.
 # otlp_endpoint: localhost:4317
+
+# Kafka broker addresses and topic to produce every captured event to.
+# Uncomment both to enable production — left unset (the default),
+# pulse-agent never dials a broker at all. See
+# docs/design/kafka-transport.md.
+# kafka_brokers:
+#   - localhost:9092
+# kafka_topic: pulse-events

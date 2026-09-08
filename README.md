@@ -6,7 +6,7 @@ connections, HTTP/DNS traffic, process activity — with little to no
 application instrumentation, and turns that into distributed traces,
 service dependency graphs, and metrics.
 
-> **Status: early-stage, active development (Day 13 of a 25-day build).**
+> **Status: early-stage, active development (Day 14 of a 25-day build).**
 > This is not yet functional software — see [What works today](#what-works-today).
 > Nothing here should be treated as production-ready until the roadmap
 > below says so explicitly.
@@ -151,14 +151,25 @@ behind specific technical choices as they're made, day by day.
   [docs/design/otlp-export.md](docs/design/otlp-export.md) for exactly
   what "OTLP-compatible" means here (trace signal, gRPC transport, no
   TLS/auth yet) and what it doesn't.
+- Kafka transport ([`internal/kafka`](internal/kafka)): the first real
+  link between the two binaries this project has built since Day 1 —
+  `pulse-agent` can produce every captured event to a Kafka topic
+  (`kafka_brokers`/`kafka_topic`), and `pulse-collector` can consume
+  and log them back (same fields, plus `kafka_group_id`), both opt-in
+  and off by default. See
+  [docs/design/kafka-transport.md](docs/design/kafka-transport.md) for
+  why Kafka sits here (decoupling agent throughput from collector
+  speed) and what's still missing (storage for a consumed event, TLS/
+  SASL, exactly-once delivery).
 
 This is real, kernel-observed telemetry, not a placeholder — run
 `pulse-agent` on Linux and it logs every process that starts or exits,
 every outbound TCP connection attempt, every connection's byte counts at
 close, every cleartext HTTP request/response line, and every DNS
 query/response with real latency — each one now also correlated into a
-trace and, if configured, exported to a real OTLP collector. What's not
-here yet: cross-service tracing, Kafka/ClickHouse-backed storage, and a
+trace, optionally exported to a real OTLP collector, and optionally
+produced to a real Kafka topic for `pulse-collector` to pick up. What's
+not here yet: cross-service tracing, ClickHouse-backed storage, and a
 service dependency graph — all later in the roadmap.
 
 ## Getting started

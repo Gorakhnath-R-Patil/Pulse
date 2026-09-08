@@ -100,6 +100,22 @@ sudo -E env "PATH=$PATH" go test ./internal/ebpf/... ./internal/process/... ./in
 Without root, the privileged tests skip themselves with an explanatory
 message rather than failing — see each package's `loader_linux_test.go`.
 
+## Kafka development
+
+`internal/kafka`'s own tests (`integration_test.go`) need a real Kafka
+broker and skip themselves, with an explanatory message, unless
+`PULSE_TEST_KAFKA_BROKERS` names one:
+
+```bash
+PULSE_TEST_KAFKA_BROKERS=localhost:9092 go test ./internal/kafka/... -v
+```
+
+There's no Docker (or Kafka broker) on this project's own Windows dev
+machine, so these tests have never been run there — only in CI's
+dedicated `kafka-integration` job, against a real single-node broker
+started as a GitHub Actions service container. See
+`docs/design/kafka-transport.md`.
+
 ## Code quality gate
 
 Before committing, run what CI runs:
@@ -132,6 +148,7 @@ internal/discovery/  Container/pod identity from cgroup membership — no runtim
 internal/tracing/    Trace assembly: organizes model.Span values into a tree by parent linkage.
 internal/correlation/ Trace correlation: groups events into spans by process and time proximity.
 internal/otlp/        OTLP/gRPC export: batches and sends correlated spans to a real OTLP collector.
+internal/kafka/       Kafka transport: produces events from pulse-agent, consumes them in pulse-collector.
 pkg/model/           Canonical telemetry Event and its sub-structures — the shared data contract.
 proto/               Wire-format contracts (.proto), checked in ahead of any code generation.
 bpf/programs/        Hand-written eBPF C source.

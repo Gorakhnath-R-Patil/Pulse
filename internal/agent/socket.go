@@ -43,12 +43,16 @@ func (s socketSource) Read() (model.Event, error) {
 // pipeline.Config.QueueSize, and events aren't dropped under
 // backpressure — the reader blocks instead. See
 // docs/design/event-pipeline.md.
-func (a *App) newSocketPipeline(loader socketLoader, corrProcessor *correlation.CorrelatingProcessor) *pipeline.Pipeline {
+// See newProcessPipeline's doc comment for what extra is for.
+func (a *App) newSocketPipeline(loader socketLoader, corrProcessor *correlation.CorrelatingProcessor, extra ...pipeline.EventProcessor) *pipeline.Pipeline {
+	processors := append([]pipeline.EventProcessor{
+		&pipeline.LoggingProcessor{Logger: a.logger},
+		corrProcessor,
+	}, extra...)
 	return pipeline.New(
 		pipeline.Config{Name: "socket data telemetry", Workers: 2, QueueSize: 256},
 		containerEnrichingSource{inner: socketSource{loader: loader, nodeName: a.cfg.NodeName}},
 		a.logger,
-		&pipeline.LoggingProcessor{Logger: a.logger},
-		corrProcessor,
+		processors...,
 	)
 }

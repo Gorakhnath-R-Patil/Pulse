@@ -33,13 +33,17 @@ func (s httpvisSource) Read() (model.Event, error) {
 }
 
 // newHTTPVisPipeline builds the HTTP visibility pipeline. See
-// newProcessPipeline's doc comment for the Load/Attach/Close contract.
-func (a *App) newHTTPVisPipeline(loader httpvisLoader, corrProcessor *correlation.CorrelatingProcessor) *pipeline.Pipeline {
+// newProcessPipeline's doc comment for the Load/Attach/Close contract
+// and what extra is for.
+func (a *App) newHTTPVisPipeline(loader httpvisLoader, corrProcessor *correlation.CorrelatingProcessor, extra ...pipeline.EventProcessor) *pipeline.Pipeline {
+	processors := append([]pipeline.EventProcessor{
+		&pipeline.LoggingProcessor{Logger: a.logger},
+		corrProcessor,
+	}, extra...)
 	return pipeline.New(
 		pipeline.Config{Name: "http visibility", Workers: 2, QueueSize: 256},
 		containerEnrichingSource{inner: httpvisSource{loader: loader, nodeName: a.cfg.NodeName}},
 		a.logger,
-		&pipeline.LoggingProcessor{Logger: a.logger},
-		corrProcessor,
+		processors...,
 	)
 }

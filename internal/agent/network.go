@@ -34,13 +34,16 @@ func (s networkSource) Read() (model.Event, error) {
 
 // newNetworkPipeline builds the network connection telemetry pipeline.
 // See newProcessPipeline's doc comment for the Load/Attach/Close
-// contract.
-func (a *App) newNetworkPipeline(loader networkLoader, corrProcessor *correlation.CorrelatingProcessor) *pipeline.Pipeline {
+// contract and what extra is for.
+func (a *App) newNetworkPipeline(loader networkLoader, corrProcessor *correlation.CorrelatingProcessor, extra ...pipeline.EventProcessor) *pipeline.Pipeline {
+	processors := append([]pipeline.EventProcessor{
+		&pipeline.LoggingProcessor{Logger: a.logger},
+		corrProcessor,
+	}, extra...)
 	return pipeline.New(
 		pipeline.Config{Name: "network connection telemetry", Workers: 2, QueueSize: 256},
 		containerEnrichingSource{inner: networkSource{loader: loader, nodeName: a.cfg.NodeName}},
 		a.logger,
-		&pipeline.LoggingProcessor{Logger: a.logger},
-		corrProcessor,
+		processors...,
 	)
 }
