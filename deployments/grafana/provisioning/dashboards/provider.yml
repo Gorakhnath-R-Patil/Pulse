@@ -1,0 +1,15 @@
+# Grafana provisioning config that loads every dashboard JSON file
+# under deployments/grafana/dashboards/ automatically on startup — see
+# datasources/datasource.yml's doc comment for the full deployment
+# path this is part of.
+apiVersion: 1
+
+providers:
+  - name: pulse
+    orgId: 1
+    folder: Pulse
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards/pulse

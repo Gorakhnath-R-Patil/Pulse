@@ -1,0 +1,30 @@
+# Grafana provisioning config for a Prometheus datasource pointed at a
+# pulse-agent or pulse-collector's own /metrics endpoint (see
+# docs/design/metrics.md) or, more realistically, at a Prometheus
+# server that's scraped one or many of them.
+#
+# This is the deployment path an operator actually uses: mount this
+# file (and dashboards/) into Grafana's provisioning directories
+# (/etc/grafana/provisioning/datasources and
+# /etc/grafana/provisioning/dashboards respectively — see
+# dashboards/provider.yml) and Grafana loads both on startup, no
+# manual UI setup needed. CI's grafana-integration job (see
+# .github/workflows/ci.yml) verifies the dashboard JSON itself against
+# a real Grafana instance via its HTTP API instead of this file
+# directly — provisioning-file loading happens at container startup,
+# before a job's own steps run, so it isn't the easiest thing to
+# assert on from within a single CI step; the dashboard JSON's
+# validity against a real server is the property that actually matters
+# and is what's verified. See docs/design/dashboards.md.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    # Replace with a real Prometheus server address, or a single
+    # pulse-agent/pulse-collector's own MetricsAddr directly for a
+    # single-instance/local setup.
+    url: http://localhost:9090
+    isDefault: true
+    editable: true

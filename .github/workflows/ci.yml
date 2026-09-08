@@ -184,3 +184,83 @@ jobs:
           fi
         env:
           PULSE_TEST_CLICKHOUSE_ADDR: localhost:9000
+
+  grafana-integration:
+    name: Grafana dashboard validation
+    runs-on: ubuntu-latest
+    # grafana-oss's official image runs a single-node Grafana server
+    # with sensible defaults; admin credentials are set explicitly
+    # below (env) rather than relying on the image's own defaults,
+    # since basic-auth API calls need to know them for certain. See
+    # docs/design/dashboards.md for why this validates the dashboard
+    # JSON against a real server via Grafana's own HTTP API, rather
+    # than only checking that the files parse as JSON.
+    services:
+      grafana:
+        image: grafana/grafana-oss:11.3.0
+        ports:
+          - 3000:3000
+        env:
+          GF_SECURITY_ADMIN_USER: admin
+          GF_SECURITY_ADMIN_PASSWORD: pulse-ci-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Wait for Grafana to become ready
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/api/health >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Grafana never became ready on localhost:3000" >&2
+          exit 1
+
+      # Creates the Prometheus datasource every checked-in dashboard's
+      # panels reference (by the placeholder uid
+      # PULSE_PROMETHEUS_DATASOURCE_UID — see
+      # deployments/grafana/dashboards/*.json), then imports each
+      # dashboard with that placeholder substituted for the datasource
+      # Grafana actually assigned. The datasource's own url doesn't
+      # need to resolve to anything real for this: creating a
+      # datasource and importing a dashboard that references it are
+      # both accepted by Grafana's API without it ever being queried,
+      # the same way saving a datasource in the UI doesn't require
+      # clicking "Save & Test". What this step actually proves is
+      # narrower but real: every dashboard file is well-formed and
+      # Grafana itself accepts its panel/target structure — not that
+      # the PromQL queries return sensible data against live metrics,
+      # which nothing in CI produces.
+      - name: Import dashboards into Grafana
+        run: |
+          auth="admin:pulse-ci-test"
+
+          ds_response="$(curl -sf -u "$auth" -X POST http://localhost:3000/api/datasources \
+            -H 'Content-Type: application/json' \
+            -d '{"name":"Prometheus","type":"prometheus","access":"proxy","url":"http://localhost:9090","isDefault":true}')"
+          ds_uid="$(echo "$ds_response" | jq -r '.datasource.uid')"
+          if [ -z "$ds_uid" ] || [ "$ds_uid" = "null" ]; then
+            echo "::error::failed to create Prometheus datasource: $ds_response"
+            exit 1
+          fi
+          echo "created datasource with uid $ds_uid"
+
+          status=0
+          for f in deployments/grafana/dashboards/*.json; do
+            echo "importing $f"
+            dashboard="$(sed "s/PULSE_PROMETHEUS_DATASOURCE_UID/$ds_uid/g" "$f")"
+            body="$(jq -n --argjson dashboard "$dashboard" '{dashboard: $dashboard, overwrite: true}')"
+            resp="$(curl -s -u "$auth" -w '\n%{http_code}' -X POST http://localhost:3000/api/dashboards/db \
+              -H 'Content-Type: application/json' -d "$body")"
+            code="$(echo "$resp" | tail -n1)"
+            payload="$(echo "$resp" | sed '$d')"
+            if [ "$code" != "200" ]; then
+              echo "::error::importing $f failed (HTTP $code): $payload"
+              status=1
+            else
+              echo "$f imported successfully: $payload"
+            fi
+          done
+          exit $status

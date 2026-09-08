@@ -136,6 +136,15 @@ Prints the service dependency graph a `pulse-collector` writing into
 that ClickHouse instance has accumulated. See
 `docs/design/service-topology.md`.
 
+## Grafana dashboards
+
+`deployments/grafana/dashboards/*.json` are plain JSON files — nothing
+to build. Verifying one actually imports into a real Grafana server
+needs one running, which (like Kafka/ClickHouse) this project's own
+Windows dev machine can't do locally; CI's `grafana-integration` job
+does it against a real `grafana-oss` service container. See
+`docs/design/dashboards.md`.
+
 ## Code quality gate
 
 Before committing, run what CI runs:
@@ -177,14 +186,17 @@ proto/               Wire-format contracts (.proto), checked in ahead of any cod
 bpf/programs/        Hand-written eBPF C source.
 bpf/headers/         Vendored minimal libbpf headers (see bpf/headers/README.md).
 examples/config/     Example YAML configs for each binary.
+deployments/grafana/ Dashboard JSON + provisioning config — see docs/design/dashboards.md.
 docs/design/         Architecture decisions (decisions.md) and design docs.
 docs/development/    This document and related contributor docs.
 ```
 
 Every directory above exists because something in it is implemented
 today. Directories described in the project's long-term target layout
-(`pkg/api`, `deployments/`, `helm/`, …) are created only on the day their
-content is actually implemented — see `docs/design/decisions.md` and the
+(`pkg/api`, `helm/`, …) that don't exist yet are created only on the
+day their content is actually implemented — `deployments/` above is
+itself an example: it appears only as of Day 18, holding only
+Grafana's config so far — see `docs/design/decisions.md` and the
 project roadmap for why. Note `bpf/generated/` from that target layout
 does not exist as a real directory: eBPF codegen output is generated
 directly into `internal/ebpf/` and not committed — see ADR-007.

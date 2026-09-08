@@ -1,0 +1,133 @@
+{
+  "uid": "pulse-overview",
+  "title": "Pulse Overview",
+  "description": "Telemetry captured by pulse-agent / consumed by pulse-collector, from the Prometheus metrics internal/metrics exposes (see docs/design/metrics.md). Every panel queries a metric that package actually emits — nothing here references a metric that doesn't exist.",
+  "tags": ["pulse"],
+  "schemaVersion": 39,
+  "version": 1,
+  "timezone": "browser",
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Events by type",
+      "description": "pulse_events_total, the coarsest signal internal/metrics exposes: is a pipeline processing anything at all.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "PULSE_PROMETHEUS_DATASOURCE_UID" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "PULSE_PROMETHEUS_DATASOURCE_UID" },
+          "expr": "sum(rate(pulse_events_total[5m])) by (type)",
+          "legendFormat": "{{type}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "TCP connect attempts by outcome",
+      "description": "pulse_network_connect_total, labeled by the observed tcp.connect_success attribute.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "PULSE_PROMETHEUS_DATASOURCE_UID" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "PULSE_PROMETHEUS_DATASOURCE_UID" },
+          "expr": "sum(rate(pulse_network_connect_total[5m])) by (success)",
+          "legendFormat": "success={{success}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Network bytes",
+      "description": "pulse_network_bytes_sent_total / pulse_network_bytes_received_total, summed from observed connection closes (internal/socket).",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "PULSE_PROMETHEUS_DATASOURCE_UID" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "PULSE_PROMETHEUS_DATASOURCE_UID" },
+          "expr": "rate(pulse_network_bytes_sent_total[5m])",
+          "legendFormat": "sent"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "PULSE_PROMETHEUS_DATASOURCE_UID" },
+          "expr": "rate(pulse_network_bytes_received_total[5m])",
+          "legendFormat": "received"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "HTTP requests by method / status",
+      "description": "pulse_http_requests_total. status is only ever set on an http.response event (see internal/httpvis) — an http.request row carries an empty status label.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "PULSE_PROMETHEUS_DATASOURCE_UID" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "PULSE_PROMETHEUS_DATASOURCE_UID" },
+          "expr": "sum(rate(pulse_http_requests_total[5m])) by (method, status)",
+          "legendFormat": "{{method}} {{status}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "DNS query latency (p50 / p95 / p99)",
+      "description": "pulse_dns_query_latency_ms — internal/dns's own real, transaction-ID-computed query/response latency (see docs/design/dns-telemetry.md), not an estimate.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "PULSE_PROMETHEUS_DATASOURCE_UID" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "PULSE_PROMETHEUS_DATASOURCE_UID" },
+          "expr": "histogram_quantile(0.50, sum(rate(pulse_dns_query_latency_ms_bucket[5m])) by (le))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "PULSE_PROMETHEUS_DATASOURCE_UID" },
+          "expr": "histogram_quantile(0.95, sum(rate(pulse_dns_query_latency_ms_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        },
+        {
+          "refId": "C",
+          "datasource": { "type": "prometheus", "uid": "PULSE_PROMETHEUS_DATASOURCE_UID" },
+          "expr": "histogram_quantile(0.99, sum(rate(pulse_dns_query_latency_ms_bucket[5m])) by (le))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "DNS responses by code",
+      "description": "pulse_dns_response_code_total.",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "PULSE_PROMETHEUS_DATASOURCE_UID" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "PULSE_PROMETHEUS_DATASOURCE_UID" },
+          "expr": "sum(rate(pulse_dns_response_code_total[5m])) by (code)",
+          "legendFormat": "code={{code}}"
+        }
+      ]
+    }
+  ]
+}

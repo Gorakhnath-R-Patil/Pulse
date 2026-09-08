@@ -6,7 +6,7 @@ connections, HTTP/DNS traffic, process activity — with little to no
 application instrumentation, and turns that into distributed traces,
 service dependency graphs, and metrics.
 
-> **Status: early-stage, active development (Day 17 of a 25-day build).**
+> **Status: early-stage, active development (Day 18 of a 25-day build).**
 > This is not yet functional software — see [What works today](#what-works-today).
 > Nothing here should be treated as production-ready until the roadmap
 > below says so explicitly.
@@ -187,6 +187,15 @@ behind specific technical choices as they're made, day by day.
   binary answers only for itself, the standard Prometheus multi-target
   model — see
   [docs/design/metrics.md](docs/design/metrics.md)).
+- Grafana dashboards ([`deployments/grafana`](deployments/grafana)): a
+  real, checked-in dashboard covering every `internal/metrics` family
+  — event rates, connect success/failure, bytes sent/received, HTTP
+  requests by method/status, DNS query latency (p50/p95/p99), DNS
+  response codes — plus the provisioning config to load it and a
+  Prometheus datasource automatically. CI imports it into a real
+  Grafana server and confirms Grafana itself accepts it; see
+  [docs/design/dashboards.md](docs/design/dashboards.md) for exactly
+  what that does and doesn't verify.
 
 This is real, kernel-observed telemetry, not a placeholder — run
 `pulse-agent` on Linux and it logs every process that starts or exits,
@@ -196,9 +205,11 @@ query/response with real latency — each one now also correlated into a
 trace, optionally exported to a real OTLP collector, optionally
 produced to a real Kafka topic, optionally stored durably in
 ClickHouse once `pulse-collector` consumes it back, queryable as a real
-(if egress-only) service dependency graph, and optionally exposed as
-real Prometheus metrics from either binary. What's not here yet:
-cross-service tracing and Grafana dashboards — later in the roadmap.
+(if egress-only) service dependency graph, optionally exposed as real
+Prometheus metrics from either binary, and visualizable in Grafana via
+a dashboard already checked into this repo. What's not here yet:
+cross-service tracing and Kubernetes/Helm deployment — later in the
+roadmap.
 
 ## Getting started
 
