@@ -30,20 +30,31 @@ const (
 	// envKafkaGroupID is pulse-collector-specific: pulse-agent produces
 	// and has no consumer group of its own.
 	envKafkaGroupID = "PULSE_KAFKA_GROUP_ID"
+
+	// envClickHouseAddr, envClickHouseDatabase, envClickHouseUsername,
+	// and envClickHousePassword are pulse-collector-specific — see
+	// applyCollectorEnvOverrides. envClickHouseAddr is comma-separated,
+	// the same convention envKafkaBrokers uses.
+	envClickHouseAddr     = "PULSE_CLICKHOUSE_ADDR"
+	envClickHouseDatabase = "PULSE_CLICKHOUSE_DATABASE"
+	envClickHouseUsername = "PULSE_CLICKHOUSE_USERNAME"
+	envClickHousePassword = "PULSE_CLICKHOUSE_PASSWORD"
+	envClickHouseTable    = "PULSE_CLICKHOUSE_TABLE"
 )
 
-// splitKafkaBrokers parses a comma-separated PULSE_KAFKA_BROKERS value
-// into a broker list, trimming whitespace around each entry and
-// dropping empty ones (so a trailing comma or extra spaces don't
-// produce a spurious empty broker address).
-func splitKafkaBrokers(v string) []string {
-	var brokers []string
-	for _, b := range strings.Split(v, ",") {
-		if b := strings.TrimSpace(b); b != "" {
-			brokers = append(brokers, b)
+// splitAddrList parses a comma-separated env var value (a broker or
+// server address list) into a slice, trimming whitespace around each
+// entry and dropping empty ones (so a trailing comma or extra spaces
+// don't produce a spurious empty address). Shared by
+// PULSE_KAFKA_BROKERS and PULSE_CLICKHOUSE_ADDR.
+func splitAddrList(v string) []string {
+	var addrs []string
+	for _, a := range strings.Split(v, ",") {
+		if a := strings.TrimSpace(a); a != "" {
+			addrs = append(addrs, a)
 		}
 	}
-	return brokers
+	return addrs
 }
 
 // applyLoggingEnvOverrides mutates cfg in place with any of the
@@ -65,7 +76,7 @@ func applyAgentEnvOverrides(cfg *AgentConfig) {
 		cfg.OTLPEndpoint = v
 	}
 	if v := os.Getenv(envKafkaBrokers); v != "" {
-		cfg.KafkaBrokers = splitKafkaBrokers(v)
+		cfg.KafkaBrokers = splitAddrList(v)
 	}
 	if v := os.Getenv(envKafkaTopic); v != "" {
 		cfg.KafkaTopic = v
@@ -76,12 +87,27 @@ func applyAgentEnvOverrides(cfg *AgentConfig) {
 // variables specific to pulse-collector.
 func applyCollectorEnvOverrides(cfg *CollectorConfig) {
 	if v := os.Getenv(envKafkaBrokers); v != "" {
-		cfg.KafkaBrokers = splitKafkaBrokers(v)
+		cfg.KafkaBrokers = splitAddrList(v)
 	}
 	if v := os.Getenv(envKafkaTopic); v != "" {
 		cfg.KafkaTopic = v
 	}
 	if v := os.Getenv(envKafkaGroupID); v != "" {
 		cfg.KafkaGroupID = v
+	}
+	if v := os.Getenv(envClickHouseAddr); v != "" {
+		cfg.ClickHouseAddr = splitAddrList(v)
+	}
+	if v := os.Getenv(envClickHouseDatabase); v != "" {
+		cfg.ClickHouseDatabase = v
+	}
+	if v := os.Getenv(envClickHouseUsername); v != "" {
+		cfg.ClickHouseUsername = v
+	}
+	if v := os.Getenv(envClickHousePassword); v != "" {
+		cfg.ClickHousePassword = v
+	}
+	if v := os.Getenv(envClickHouseTable); v != "" {
+		cfg.ClickHouseTable = v
 	}
 }

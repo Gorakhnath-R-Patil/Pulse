@@ -116,6 +116,16 @@ dedicated `kafka-integration` job, against a real single-node broker
 started as a GitHub Actions service container. See
 `docs/design/kafka-transport.md`.
 
+`internal/storage`'s own tests (`integration_test.go`) need a real
+ClickHouse server the same way, gated on `PULSE_TEST_CLICKHOUSE_ADDR`:
+
+```bash
+PULSE_TEST_CLICKHOUSE_ADDR=localhost:9000 go test ./internal/storage/... -v
+```
+
+Also never run on this project's Windows dev machine; only in CI's
+`clickhouse-integration` job. See `docs/design/clickhouse-storage.md`.
+
 ## Code quality gate
 
 Before committing, run what CI runs:
@@ -149,6 +159,7 @@ internal/tracing/    Trace assembly: organizes model.Span values into a tree by 
 internal/correlation/ Trace correlation: groups events into spans by process and time proximity.
 internal/otlp/        OTLP/gRPC export: batches and sends correlated spans to a real OTLP collector.
 internal/kafka/       Kafka transport: produces events from pulse-agent, consumes them in pulse-collector.
+internal/storage/     ClickHouse storage: batches and writes consumed events into a real ClickHouse table.
 pkg/model/           Canonical telemetry Event and its sub-structures — the shared data contract.
 proto/               Wire-format contracts (.proto), checked in ahead of any code generation.
 bpf/programs/        Hand-written eBPF C source.

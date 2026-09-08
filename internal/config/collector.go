@@ -3,10 +3,10 @@ package config
 import "fmt"
 
 // CollectorConfig is the top-level configuration for pulse-collector.
-// Day 01 gave it only what it needs to start up and log; Day 14 adds
-// Kafka consumption. Storage (ClickHouse, Day 15) still doesn't exist,
-// so a consumed event today is only logged — see
-// docs/design/kafka-transport.md.
+// Day 01 gave it only what it needs to start up and log; Day 14 added
+// Kafka consumption; Day 15 adds ClickHouse storage for what's
+// consumed — see docs/design/kafka-transport.md and
+// docs/design/clickhouse-storage.md.
 type CollectorConfig struct {
 	Logging LoggingConfig `yaml:"logging"`
 
@@ -24,6 +24,25 @@ type CollectorConfig struct {
 	// left empty, so a single-collector deployment works without
 	// naming one explicitly.
 	KafkaGroupID string `yaml:"kafka_group_id,omitempty"`
+
+	// ClickHouseAddr is a list of ClickHouse native-protocol addresses
+	// (e.g. ["localhost:9000"]) to store consumed events in. Empty
+	// (the default) disables storage entirely — a consumed event is
+	// only logged, as it was before this field existed.
+	ClickHouseAddr []string `yaml:"clickhouse_addr,omitempty"`
+
+	// ClickHouseDatabase, ClickHouseUsername, and ClickHousePassword
+	// authenticate the connection. Username/Password default to
+	// ClickHouse's own out-of-the-box defaults ("default" / "") when
+	// left empty. Database defaults to "pulse" if ClickHouseAddr is set
+	// and this is left empty.
+	ClickHouseDatabase string `yaml:"clickhouse_database,omitempty"`
+	ClickHouseUsername string `yaml:"clickhouse_username,omitempty"`
+	ClickHousePassword string `yaml:"clickhouse_password,omitempty"`
+
+	// ClickHouseTable is the table events are stored in. Defaults to
+	// "events" if ClickHouseAddr is set and this is left empty.
+	ClickHouseTable string `yaml:"clickhouse_table,omitempty"`
 }
 
 // DefaultCollectorConfig returns the configuration used when no file is
@@ -53,6 +72,16 @@ func (c CollectorConfig) Validate() error {
 // a consumer group explicitly.
 const defaultKafkaGroupID = "pulse-collector"
 
+// defaultClickHouseDatabase and defaultClickHouseTable are used when
+// ClickHouseAddr is set but the corresponding field is left empty —
+// the same "sensible default once the feature is turned on, no default
+// at all for whether it's on" shape defaultKafkaGroupID already
+// establishes.
+const (
+	defaultClickHouseDatabase = "pulse"
+	defaultClickHouseTable    = "events"
+)
+
 // LoadCollectorConfig builds a CollectorConfig from defaults, an optional
 // YAML file, and environment overrides, in that order of precedence. See
 // LoadAgentConfig for the precedence and missing-file semantics.
@@ -70,6 +99,14 @@ func LoadCollectorConfig(path string) (CollectorConfig, error) {
 
 	if len(cfg.KafkaBrokers) > 0 && cfg.KafkaGroupID == "" {
 		cfg.KafkaGroupID = defaultKafkaGroupID
+	}
+	if len(cfg.ClickHouseAddr) > 0 {
+		if cfg.ClickHouseDatabase == "" {
+			cfg.ClickHouseDatabase = defaultClickHouseDatabase
+		}
+		if cfg.ClickHouseTable == "" {
+			cfg.ClickHouseTable = defaultClickHouseTable
+		}
 	}
 
 	if err := cfg.Validate(); err != nil {

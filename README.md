@@ -6,7 +6,7 @@ connections, HTTP/DNS traffic, process activity — with little to no
 application instrumentation, and turns that into distributed traces,
 service dependency graphs, and metrics.
 
-> **Status: early-stage, active development (Day 14 of a 25-day build).**
+> **Status: early-stage, active development (Day 15 of a 25-day build).**
 > This is not yet functional software — see [What works today](#what-works-today).
 > Nothing here should be treated as production-ready until the roadmap
 > below says so explicitly.
@@ -155,22 +155,30 @@ behind specific technical choices as they're made, day by day.
   link between the two binaries this project has built since Day 1 —
   `pulse-agent` can produce every captured event to a Kafka topic
   (`kafka_brokers`/`kafka_topic`), and `pulse-collector` can consume
-  and log them back (same fields, plus `kafka_group_id`), both opt-in
-  and off by default. See
+  them back (same fields, plus `kafka_group_id`), both opt-in and off
+  by default. See
   [docs/design/kafka-transport.md](docs/design/kafka-transport.md) for
   why Kafka sits here (decoupling agent throughput from collector
-  speed) and what's still missing (storage for a consumed event, TLS/
-  SASL, exactly-once delivery).
+  speed) and what's still missing (TLS/SASL, exactly-once delivery).
+- ClickHouse storage ([`internal/storage`](internal/storage)): a
+  consumed event can now be durably stored, not just logged — a
+  batching, retrying writer inserts it into a real ClickHouse table
+  (schema created automatically), opt-in via `clickhouse_addr`, off by
+  default. See
+  [docs/design/clickhouse-storage.md](docs/design/clickhouse-storage.md)
+  for why ClickHouse specifically, and what's still missing (TLS,
+  partitioning, a real migration story beyond `IF NOT EXISTS`).
 
 This is real, kernel-observed telemetry, not a placeholder — run
 `pulse-agent` on Linux and it logs every process that starts or exits,
 every outbound TCP connection attempt, every connection's byte counts at
 close, every cleartext HTTP request/response line, and every DNS
 query/response with real latency — each one now also correlated into a
-trace, optionally exported to a real OTLP collector, and optionally
-produced to a real Kafka topic for `pulse-collector` to pick up. What's
-not here yet: cross-service tracing, ClickHouse-backed storage, and a
-service dependency graph — all later in the roadmap.
+trace, optionally exported to a real OTLP collector, optionally
+produced to a real Kafka topic, and — once `pulse-collector` consumes
+it back — optionally stored durably in ClickHouse. What's not here yet:
+cross-service tracing, a service dependency graph, and a metrics engine
+— all later in the roadmap.
 
 ## Getting started
 

@@ -16,23 +16,34 @@ type kafkaConsumer interface {
 	Close() error
 }
 
-// consumeLoop reads events from consumer and logs each one, reusing
-// internal/pipeline.LoggingProcessor's own event-to-log-fields logic
-// rather than duplicating it — a consumed model.Event is the same
-// shape a pipeline processes, just arriving from Kafka instead of a
-// local capability. It returns once Consume fails: the expected
-// outcome of either ctx being canceled or Close being called during
-// shutdown (see Run), logged only if it wasn't.
-func (a *App) consumeLoop(ctx context.Context, consumer kafkaConsumer) {
-	logProcessor := &pipeline.LoggingProcessor{Logger: a.logger}
-	for {
-		event, err := consumer.Consume(ctx)
-		if err != nil {
-			if ctx.Err() == nil {
-				a.logger.Warn("kafka consume failed", "error", err)
-			}
-			return
-		}
-		_ = logProcessor.Process(ctx, event) // never returns an error
-	}
+// kafkaSource adapts a kafkaConsumer to pipeline.EventSource — the
+// same shape internal/agent's own per-capability sources (processSource,
+// networkSource, ...) already have. Read blocks until an event is
+// available or the underlying consumer is closed (see Run in
+// collector.go, which closes it on shutdown the same way
+// internal/agent closes each capability's Loader): it deliberately
+// takes no context of its own, matching every other EventSource in
+// this project.
+type kafkaSource struct {
+	consumer kafkaConsumer
+}
+
+func (s kafkaSource) Read() (model.Event, error) {
+	return s.consumer.Consume(context.Background())
+}
+
+// newKafkaPipeline builds pulse-collector's Kafka consumption pipeline.
+// extra mirrors internal/agent's newXPipeline pattern — e.g. a
+// *storage.Processor, appended after the always-present
+// LoggingProcessor, when ClickHouse storage is configured (see Run).
+func (a *App) newKafkaPipeline(consumer kafkaConsumer, extra ...pipeline.EventProcessor) *pipeline.Pipeline {
+	processors := append([]pipeline.EventProcessor{
+		&pipeline.LoggingProcessor{Logger: a.logger},
+	}, extra...)
+	return pipeline.New(
+		pipeline.Config{Name: "kafka consumption", Workers: 2, QueueSize: 256},
+		kafkaSource{consumer: consumer},
+		a.logger,
+		processors...,
+	)
 }

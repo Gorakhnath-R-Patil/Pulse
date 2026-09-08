@@ -24,3 +24,14 @@ logging:
 #   - localhost:9092
 # kafka_topic: pulse-events
 # kafka_group_id: pulse-collector
+
+# ClickHouse address to store consumed events in. Uncomment to enable
+# storage — left unset (the default), a consumed event is only logged.
+# database/table are created automatically if they don't exist. See
+# docs/design/clickhouse-storage.md.
+# clickhouse_addr:
+#   - localhost:9000
+# clickhouse_database: pulse
+# clickhouse_username: default
+# clickhouse_password: ""
+# clickhouse_table: events

@@ -21,7 +21,11 @@ previous:
    `PULSE_KAFKA_BROKERS` (comma-separated) and `PULSE_KAFKA_TOPIC`
    override `kafka_brokers`/`kafka_topic` for both binaries;
    `PULSE_KAFKA_GROUP_ID` (`pulse-collector` only) overrides
-   `kafka_group_id`. This matches the common container pattern of
+   `kafka_group_id`; `PULSE_CLICKHOUSE_ADDR` (comma-separated),
+   `PULSE_CLICKHOUSE_DATABASE`, `PULSE_CLICKHOUSE_USERNAME`,
+   `PULSE_CLICKHOUSE_PASSWORD`, and `PULSE_CLICKHOUSE_TABLE`
+   (`pulse-collector` only) override the corresponding
+   `clickhouse_*` fields. This matches the common container pattern of
    overriding a mounted config file at deploy time without editing it.
 4. **Validation** — the fully-resolved config is validated before the
    loader returns it. Any failure here is also a startup error
@@ -51,9 +55,14 @@ ignored key.
 | `kafka_brokers`   | list of strings | (empty, consumption disabled) | Kafka bootstrap addresses. Must be set together with `kafka_topic`. |
 | `kafka_topic`     | string | (empty) | Topic events are consumed from — the same topic a producing `pulse-agent` is configured with. |
 | `kafka_group_id`  | string | `pulse-collector` (once `kafka_brokers` is set) | Kafka consumer group this collector joins. |
+| `clickhouse_addr`     | list of strings | (empty, storage disabled) | ClickHouse native-protocol addresses, e.g. `[localhost:9000]`. See `docs/design/clickhouse-storage.md`. |
+| `clickhouse_database` | string | `pulse` (once `clickhouse_addr` is set) | Database events are stored in; created automatically if it doesn't exist. |
+| `clickhouse_username` | string | (empty → ClickHouse's own `default`) | |
+| `clickhouse_password` | string | (empty) | |
+| `clickhouse_table`    | string | `events` (once `clickhouse_addr` is set) | Table events are stored in; created automatically if it doesn't exist. |
 
-The collector's schema grows as ingestion (Kafka, Day 14 — above) and
-storage (ClickHouse, Day 15) are implemented.
+The collector's schema grows as ingestion (Kafka, Day 14) and storage
+(ClickHouse, Day 15 — both above) are implemented.
 
 ## Validating a config file without starting a binary
 

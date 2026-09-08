@@ -130,3 +130,53 @@ jobs:
           fi
         env:
           PULSE_TEST_KAFKA_BROKERS: localhost:9092
+
+  clickhouse-integration:
+    name: ClickHouse integration tests
+    runs-on: ubuntu-latest
+    # clickhouse/clickhouse-server's official image runs a single-node
+    # server with sensible defaults (native protocol on 9000, HTTP on
+    # 8123, "default" user/no password) when started with no extra
+    # configuration — see docs/design/clickhouse-storage.md for why
+    # this needed a service container rather than running everywhere,
+    # same reasoning as kafka-integration above.
+    services:
+      clickhouse:
+        image: clickhouse/clickhouse-server:24.8
+        ports:
+          - 9000:9000
+          - 8123:8123
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: Wait for ClickHouse to accept connections
+        run: |
+          for i in $(seq 1 30); do
+            if (exec 3<>/dev/tcp/localhost/9000) 2>/dev/null; then
+              exec 3<&- 3>&-
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "ClickHouse never became reachable on localhost:9000" >&2
+          exit 1
+
+      # See internal/kafka's identical step above for why output is
+      # captured and surfaced via ::error:: rather than relying on the
+      # (unauthenticated-inaccessible) raw job log.
+      - name: Test internal/storage (real ClickHouse)
+        run: |
+          if ! go test ./internal/storage/... -v -count=1 2>&1 | tee test-output.log; then
+            msg="$(tail -c 3000 test-output.log | sed -e 's/%/%25/g' | sed -e ':a;N;$!ba' -e 's/\r/%0D/g' -e 's/\n/%0A/g')"
+            echo "::error::${msg}"
+            exit 1
+          fi
+        env:
+          PULSE_TEST_CLICKHOUSE_ADDR: localhost:9000

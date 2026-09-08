@@ -116,3 +116,66 @@ func TestLoadCollectorConfig_KafkaTopicWithoutBrokersIsError(t *testing.T) {
 		t.Fatalf("LoadCollectorConfig() error = %v, want it to wrap ErrInvalidValue (kafka_topic without kafka_brokers)", err)
 	}
 }
+
+func TestLoadCollectorConfig_ClickHouseDefaultsDisabled(t *testing.T) {
+	cfg, err := config.LoadCollectorConfig("")
+	if err != nil {
+		t.Fatalf("LoadCollectorConfig(\"\") returned error: %v", err)
+	}
+	if len(cfg.ClickHouseAddr) != 0 {
+		t.Errorf("ClickHouseAddr = %v, want empty by default (storage disabled)", cfg.ClickHouseAddr)
+	}
+}
+
+func TestLoadCollectorConfig_ClickHouseEnvOverride(t *testing.T) {
+	t.Setenv("PULSE_CLICKHOUSE_ADDR", "localhost:9000, localhost:9001")
+	t.Setenv("PULSE_CLICKHOUSE_USERNAME", "pulse")
+	t.Setenv("PULSE_CLICKHOUSE_PASSWORD", "secret")
+
+	cfg, err := config.LoadCollectorConfig("")
+	if err != nil {
+		t.Fatalf("LoadCollectorConfig(\"\") returned error: %v", err)
+	}
+	wantAddr := []string{"localhost:9000", "localhost:9001"}
+	if len(cfg.ClickHouseAddr) != len(wantAddr) || cfg.ClickHouseAddr[0] != wantAddr[0] || cfg.ClickHouseAddr[1] != wantAddr[1] {
+		t.Errorf("ClickHouseAddr = %v, want %v (whitespace trimmed)", cfg.ClickHouseAddr, wantAddr)
+	}
+	if cfg.ClickHouseUsername != "pulse" {
+		t.Errorf("ClickHouseUsername = %q, want %q", cfg.ClickHouseUsername, "pulse")
+	}
+	if cfg.ClickHousePassword != "secret" {
+		t.Errorf("ClickHousePassword = %q, want %q", cfg.ClickHousePassword, "secret")
+	}
+}
+
+func TestLoadCollectorConfig_ClickHouseDatabaseAndTableDefaultWhenAddrSet(t *testing.T) {
+	t.Setenv("PULSE_CLICKHOUSE_ADDR", "localhost:9000")
+
+	cfg, err := config.LoadCollectorConfig("")
+	if err != nil {
+		t.Fatalf("LoadCollectorConfig(\"\") returned error: %v", err)
+	}
+	if cfg.ClickHouseDatabase != "pulse" {
+		t.Errorf("ClickHouseDatabase = %q, want default %q", cfg.ClickHouseDatabase, "pulse")
+	}
+	if cfg.ClickHouseTable != "events" {
+		t.Errorf("ClickHouseTable = %q, want default %q", cfg.ClickHouseTable, "events")
+	}
+}
+
+func TestLoadCollectorConfig_ClickHouseDatabaseAndTableEnvOverride(t *testing.T) {
+	t.Setenv("PULSE_CLICKHOUSE_ADDR", "localhost:9000")
+	t.Setenv("PULSE_CLICKHOUSE_DATABASE", "custom_db")
+	t.Setenv("PULSE_CLICKHOUSE_TABLE", "custom_events")
+
+	cfg, err := config.LoadCollectorConfig("")
+	if err != nil {
+		t.Fatalf("LoadCollectorConfig(\"\") returned error: %v", err)
+	}
+	if cfg.ClickHouseDatabase != "custom_db" {
+		t.Errorf("ClickHouseDatabase = %q, want env override %q", cfg.ClickHouseDatabase, "custom_db")
+	}
+	if cfg.ClickHouseTable != "custom_events" {
+		t.Errorf("ClickHouseTable = %q, want env override %q", cfg.ClickHouseTable, "custom_events")
+	}
+}
