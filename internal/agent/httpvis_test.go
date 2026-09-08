@@ -45,6 +45,10 @@ func (f *fakeHTTPVisLoader) Read() (httpvis.HTTPEvent, error) {
 	}
 	if f.block != nil {
 		<-f.block
+		if f.terminalErr != nil {
+			return httpvis.HTTPEvent{}, f.terminalErr
+		}
+		return httpvis.HTTPEvent{}, errFakeLoaderClosed
 	}
 	return httpvis.HTTPEvent{}, f.terminalErr
 }

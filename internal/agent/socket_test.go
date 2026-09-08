@@ -45,6 +45,10 @@ func (f *fakeSocketLoader) Read() (socket.CloseEvent, error) {
 	}
 	if f.block != nil {
 		<-f.block
+		if f.terminalErr != nil {
+			return socket.CloseEvent{}, f.terminalErr
+		}
+		return socket.CloseEvent{}, errFakeLoaderClosed
 	}
 	return socket.CloseEvent{}, f.terminalErr
 }

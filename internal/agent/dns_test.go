@@ -45,6 +45,10 @@ func (f *fakeDNSLoader) Read() (dns.DNSEvent, error) {
 	}
 	if f.block != nil {
 		<-f.block
+		if f.terminalErr != nil {
+			return dns.DNSEvent{}, f.terminalErr
+		}
+		return dns.DNSEvent{}, errFakeLoaderClosed
 	}
 	return dns.DNSEvent{}, f.terminalErr
 }

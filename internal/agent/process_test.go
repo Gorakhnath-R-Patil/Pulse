@@ -39,6 +39,22 @@ func (b *syncBuffer) String() string {
 	return b.buf.String()
 }
 
+// errFakeLoaderClosed is what a fake loader's Read returns once block
+// has been closed (via Close) and no test-specific terminalErr was
+// set. A real Loader's Read always returns a non-nil error once the
+// underlying resource is closed; a fake that instead returned (zero
+// event, nil) would look like a genuine, successfully-read event to
+// pipeline.Pipeline.read, which would then queue and loop on it
+// indefinitely rather than treating it as the end of the stream —
+// harmless as long as nothing downstream ever blocks on unconsumed
+// output from processing those spurious events, but a real deadlock
+// the moment something does (see the equivalent fix in
+// internal/collector/kafka_test.go's fakeConsumer, discovered when
+// exactly that happened there). Shared across every fake*Loader in
+// this package (process_test.go, network_test.go, socket_test.go,
+// httpvis_test.go, dns_test.go).
+var errFakeLoaderClosed = errors.New("fake loader: closed")
+
 // fakeProcessLoader is a processLoader test double: it never touches a
 // real kernel, so these tests exercise this package's wiring logic
 // (does processSource normalize correctly, does the resulting pipeline
@@ -83,7 +99,11 @@ func (f *fakeProcessLoader) Read() (process.ProcessEvent, error) {
 		return e, nil
 	}
 	if f.block != nil {
-		<-f.block // never closed by these tests: blocks forever
+		<-f.block
+		if f.terminalErr != nil {
+			return process.ProcessEvent{}, f.terminalErr
+		}
+		return process.ProcessEvent{}, errFakeLoaderClosed
 	}
 	return process.ProcessEvent{}, f.terminalErr
 }

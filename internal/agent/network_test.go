@@ -45,6 +45,10 @@ func (f *fakeNetworkLoader) Read() (network.ConnectEvent, error) {
 	}
 	if f.block != nil {
 		<-f.block
+		if f.terminalErr != nil {
+			return network.ConnectEvent{}, f.terminalErr
+		}
+		return network.ConnectEvent{}, errFakeLoaderClosed
 	}
 	return network.ConnectEvent{}, f.terminalErr
 }
