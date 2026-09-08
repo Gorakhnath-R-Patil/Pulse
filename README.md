@@ -6,7 +6,7 @@ connections, HTTP/DNS traffic, process activity — with little to no
 application instrumentation, and turns that into distributed traces,
 service dependency graphs, and metrics.
 
-> **Status: early-stage, active development (Day 15 of a 25-day build).**
+> **Status: early-stage, active development (Day 16 of a 25-day build).**
 > This is not yet functional software — see [What works today](#what-works-today).
 > Nothing here should be treated as production-ready until the roadmap
 > below says so explicitly.
@@ -168,6 +168,17 @@ behind specific technical choices as they're made, day by day.
   [docs/design/clickhouse-storage.md](docs/design/clickhouse-storage.md)
   for why ClickHouse specifically, and what's still missing (TLS,
   partitioning, a real migration story beyond `IF NOT EXISTS`).
+- Service topology ([`internal/topology`](internal/topology), via
+  `pulse-cli topology`): queries every stored `network.connect` event
+  and prints a real dependency graph — which observed service talked
+  to which destination, how often, how much data — as Graphviz DOT or
+  plain text. Read
+  [docs/design/service-topology.md](docs/design/service-topology.md)
+  for what it honestly is, not more: every edge's destination is a
+  bare `address:port`, never a resolved service name, because nothing
+  in this project has ever captured the *receiving* side of a
+  connection — the same gap `docs/design/trace-correlation.md` already
+  documented for tracing.
 
 This is real, kernel-observed telemetry, not a placeholder — run
 `pulse-agent` on Linux and it logs every process that starts or exits,
@@ -175,10 +186,10 @@ every outbound TCP connection attempt, every connection's byte counts at
 close, every cleartext HTTP request/response line, and every DNS
 query/response with real latency — each one now also correlated into a
 trace, optionally exported to a real OTLP collector, optionally
-produced to a real Kafka topic, and — once `pulse-collector` consumes
-it back — optionally stored durably in ClickHouse. What's not here yet:
-cross-service tracing, a service dependency graph, and a metrics engine
-— all later in the roadmap.
+produced to a real Kafka topic, optionally stored durably in
+ClickHouse once `pulse-collector` consumes it back, and queryable as a
+real (if egress-only) service dependency graph. What's not here yet:
+cross-service tracing and a metrics engine — later in the roadmap.
 
 ## Getting started
 

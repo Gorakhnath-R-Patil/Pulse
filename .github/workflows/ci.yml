@@ -168,12 +168,16 @@ jobs:
           echo "ClickHouse never became reachable on localhost:9000" >&2
           exit 1
 
-      # See internal/kafka's identical step above for why output is
-      # captured and surfaced via ::error:: rather than relying on the
-      # (unauthenticated-inaccessible) raw job log.
-      - name: Test internal/storage (real ClickHouse)
+      # internal/topology (Day 16) and internal/cli's own topology
+      # tests query the same real ClickHouse server, so they run here
+      # too rather than spinning up a second, redundant service
+      # container just for them. See internal/kafka's identical step
+      # above for why output is captured and surfaced via ::error::
+      # rather than relying on the (unauthenticated-inaccessible) raw
+      # job log.
+      - name: Test internal/storage, internal/topology, internal/cli (real ClickHouse)
         run: |
-          if ! go test ./internal/storage/... -v -count=1 2>&1 | tee test-output.log; then
+          if ! go test ./internal/storage/... ./internal/topology/... ./internal/cli/... -v -count=1 2>&1 | tee test-output.log; then
             msg="$(tail -c 3000 test-output.log | sed -e 's/%/%25/g' | sed -e ':a;N;$!ba' -e 's/\r/%0D/g' -e 's/\n/%0A/g')"
             echo "::error::${msg}"
             exit 1

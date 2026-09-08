@@ -125,6 +125,16 @@ PULSE_TEST_CLICKHOUSE_ADDR=localhost:9000 go test ./internal/storage/... -v
 
 Also never run on this project's Windows dev machine; only in CI's
 `clickhouse-integration` job. See `docs/design/clickhouse-storage.md`.
+`internal/topology` and `internal/cli`'s own topology tests share the
+same gate and the same CI job, since they query the same server.
+
+```bash
+pulse-cli topology -clickhouse-addr localhost:9000 -format dot
+```
+
+Prints the service dependency graph a `pulse-collector` writing into
+that ClickHouse instance has accumulated. See
+`docs/design/service-topology.md`.
 
 ## Code quality gate
 
@@ -160,6 +170,7 @@ internal/correlation/ Trace correlation: groups events into spans by process and
 internal/otlp/        OTLP/gRPC export: batches and sends correlated spans to a real OTLP collector.
 internal/kafka/       Kafka transport: produces events from pulse-agent, consumes them in pulse-collector.
 internal/storage/     ClickHouse storage: batches and writes consumed events into a real ClickHouse table.
+internal/topology/    Service topology: queries stored events into a dependency graph (pulse-cli topology).
 pkg/model/           Canonical telemetry Event and its sub-structures — the shared data contract.
 proto/               Wire-format contracts (.proto), checked in ahead of any code generation.
 bpf/programs/        Hand-written eBPF C source.

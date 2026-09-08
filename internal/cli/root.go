@@ -30,6 +30,7 @@ Usage:
 Commands:
   version          Print version information and exit.
   config validate  Validate a pulse-agent or pulse-collector config file.
+  topology         Print the service dependency graph stored in ClickHouse.
 
 Run 'pulse-cli <command> -h' for details on a specific command.
 `
@@ -49,6 +50,8 @@ func Execute(args []string, stdout, stderr io.Writer) int {
 		return runVersion(rest, stdout, stderr)
 	case "config":
 		return runConfig(rest, stdout, stderr)
+	case "topology":
+		return runTopology(rest, stdout, stderr)
 	case "-h", "--help", "help":
 		fmt.Fprint(stdout, usage)
 		return ExitSuccess
