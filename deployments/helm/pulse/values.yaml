@@ -1,0 +1,51 @@
+image:
+  repository: ghcr.io/gorakhnath-r-patil/pulse
+  tag: ""            # defaults to the chart appVersion
+  pullPolicy: IfNotPresent
+
+logging:
+  level: info
+  format: json
+
+# Kafka is the link between agent and collector. The agent produces to it and
+# the collector consumes from it; both stay disabled while brokers is empty.
+kafka:
+  brokers: []        # e.g. ["kafka.kafka.svc:9092"]
+  topic: pulse-events
+  groupId: pulse-collector
+
+agent:
+  enabled: true
+  metricsPort: 9090
+  otlpEndpoint: ""   # e.g. "otel-collector.observability.svc:4317"; empty disables export
+  # eBPF needs kernel privilege. Mode "capabilities" asks for the minimum
+  # (CAP_BPF, CAP_PERFMON, CAP_SYS_RESOURCE) and needs Linux 5.8+.
+  # Mode "privileged" is the fallback for nodes where that is not enough.
+  securityMode: capabilities
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { memory: 256Mi }
+  tolerations:
+    - operator: Exists   # observe every node, including tainted ones
+  nodeSelector: {}
+
+collector:
+  enabled: true
+  replicas: 1
+  metricsPort: 9091
+  clickhouse:
+    addrs: []        # e.g. ["clickhouse.db.svc:9000"]; empty keeps events log-only
+    database: pulse
+    table: events
+    username: default
+    # Name of an existing Secret holding the password under key "password".
+    # Leave empty for an unauthenticated ClickHouse.
+    passwordSecret: ""
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { memory: 256Mi }
+
+# Adds Prometheus scrape annotations to the pods. Pulse has no health
+# endpoints yet, so the chart defines no liveness or readiness probes.
+prometheus:
+  annotations: true

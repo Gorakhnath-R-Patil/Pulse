@@ -1,0 +1,77 @@
+{{- if .Values.collector.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-collector
+  labels:
+    {{- include "pulse.labels" . | nindent 4 }}
+    app.kubernetes.io/component: collector
+spec:
+  replicas: {{ .Values.collector.replicas }}
+  selector:
+    matchLabels:
+      {{- include "pulse.selector" (dict "root" . "component" "collector") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "pulse.selector" (dict "root" . "component" "collector") | nindent 8 }}
+      {{- if .Values.prometheus.annotations }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.collector.metricsPort | quote }}
+        prometheus.io/path: /metrics
+      {{- end }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+      containers:
+        - name: collector
+          image: {{ include "pulse.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/usr/local/bin/pulse-collector"]
+          env:
+            - name: PULSE_LOG_LEVEL
+              value: {{ .Values.logging.level | quote }}
+            - name: PULSE_LOG_FORMAT
+              value: {{ .Values.logging.format | quote }}
+            - name: PULSE_METRICS_ADDR
+              value: ":{{ .Values.collector.metricsPort }}"
+            {{- if .Values.kafka.brokers }}
+            - name: PULSE_KAFKA_BROKERS
+              value: {{ join "," .Values.kafka.brokers | quote }}
+            - name: PULSE_KAFKA_TOPIC
+              value: {{ .Values.kafka.topic | quote }}
+            - name: PULSE_KAFKA_GROUP_ID
+              value: {{ .Values.kafka.groupId | quote }}
+            {{- end }}
+            {{- with .Values.collector.clickhouse }}
+            {{- if .addrs }}
+            - name: PULSE_CLICKHOUSE_ADDR
+              value: {{ join "," .addrs | quote }}
+            - name: PULSE_CLICKHOUSE_DATABASE
+              value: {{ .database | quote }}
+            - name: PULSE_CLICKHOUSE_TABLE
+              value: {{ .table | quote }}
+            - name: PULSE_CLICKHOUSE_USERNAME
+              value: {{ .username | quote }}
+            {{- if .passwordSecret }}
+            - name: PULSE_CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .passwordSecret }}
+                  key: password
+            {{- end }}
+            {{- end }}
+            {{- end }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.collector.metricsPort }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.collector.resources | nindent 12 }}
+{{- end }}

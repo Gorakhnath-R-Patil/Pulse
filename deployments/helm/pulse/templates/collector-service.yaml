@@ -1,0 +1,16 @@
+{{- if .Values.collector.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-collector
+  labels:
+    {{- include "pulse.labels" . | nindent 4 }}
+    app.kubernetes.io/component: collector
+spec:
+  selector:
+    {{- include "pulse.selector" (dict "root" . "component" "collector") | nindent 4 }}
+  ports:
+    - name: metrics
+      port: {{ .Values.collector.metricsPort }}
+      targetPort: metrics
+{{- end }}

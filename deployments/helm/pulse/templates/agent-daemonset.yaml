@@ -1,0 +1,73 @@
+{{- if .Values.agent.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ .Release.Name }}-agent
+  labels:
+    {{- include "pulse.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent
+spec:
+  selector:
+    matchLabels:
+      {{- include "pulse.selector" (dict "root" . "component" "agent") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "pulse.selector" (dict "root" . "component" "agent") | nindent 8 }}
+      {{- if .Values.prometheus.annotations }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.agent.metricsPort | quote }}
+        prometheus.io/path: /metrics
+      {{- end }}
+    spec:
+      # The agent resolves container identity from /proc/<pid>/cgroup, so it
+      # must see host processes, not just its own namespace.
+      hostPID: true
+      containers:
+        - name: agent
+          image: {{ include "pulse.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/usr/local/bin/pulse-agent"]
+          env:
+            - name: PULSE_LOG_LEVEL
+              value: {{ .Values.logging.level | quote }}
+            - name: PULSE_LOG_FORMAT
+              value: {{ .Values.logging.format | quote }}
+            - name: PULSE_METRICS_ADDR
+              value: ":{{ .Values.agent.metricsPort }}"
+            {{- if .Values.agent.otlpEndpoint }}
+            - name: PULSE_OTLP_ENDPOINT
+              value: {{ .Values.agent.otlpEndpoint | quote }}
+            {{- end }}
+            {{- if .Values.kafka.brokers }}
+            - name: PULSE_KAFKA_BROKERS
+              value: {{ join "," .Values.kafka.brokers | quote }}
+            - name: PULSE_KAFKA_TOPIC
+              value: {{ .Values.kafka.topic | quote }}
+            {{- end }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.agent.metricsPort }}
+          securityContext:
+            {{- if eq .Values.agent.securityMode "privileged" }}
+            privileged: true
+            {{- else }}
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+              add: ["BPF", "PERFMON", "SYS_RESOURCE"]
+            {{- end }}
+          resources:
+            {{- toYaml .Values.agent.resources | nindent 12 }}
+      {{- with .Values.agent.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agent.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

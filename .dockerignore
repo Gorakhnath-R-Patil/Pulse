@@ -1,0 +1,11 @@
+.git
+bin/
+dist/
+coverage.out
+coverage.html
+*.test
+*_bpfel.go
+*_bpfeb.go
+*.o
+.idea/
+.vscode/
